@@ -2,7 +2,8 @@
 # Github Actions build for rclone
 # -*- compile-command: "yamllint -f parsable build.yml" -*-
 
-name: build
+name: act-build-release
+# date: 2023.05.01 08:30
 
 # Trigger the workflow on push or pull request
 on:
@@ -19,6 +20,27 @@ on:
         type: boolean
         required: true
         default: true
+      archive_tarxz:
+        description: Create tar.xz with rclone*
+        type: boolean
+        required: true
+        default: false
+      archive_zips:
+        description: Create tar.xz with with zip files found in folders
+        type: boolean
+        required: true
+        default: false
+      archive_all:
+        description: Create tar.xz with all files
+        type: boolean
+        required: true
+        default: false
+
+env:
+  TAG_NAME_ARCXZ: release-ARCXZ
+  TAG_NAME_BETA: release-beta
+  TAG_NAME_LATEST: release-latest
+  PROG_NAME: rclone
 
 jobs:
   build:
@@ -208,6 +230,7 @@ jobs:
         if: matrix.compile_all
 
       - name: Deploy built binaries
+        continue-on-error: true
         shell: bash
         run: |
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then make release_dep_linux ; fi
@@ -217,7 +240,82 @@ jobs:
           RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
         # working-directory: '$(modulePath)'
         # Deploy binaries if enabled in config && not a PR && not a fork
-        if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone'
+        #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
+        if: matrix.deploy
+
+      - name: Set env.VERSION
+        continue-on-error: true
+        shell: bash
+        run: |
+          rclone_version=$(cat VERSION)
+          echo "VERSION=$rclone_version" >> $GITHUB_ENV
+
+      - name: Publish Release latest
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_LATEST }}
+          files: |
+            *latest*.zip
+            build/*latest*.zip
+            VERSION
+
+      - name: Publish Release beta
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.VERSION }}
+          files: |
+            *beta.*.zip
+            build/*beta.*.zip
+            VERSION
+
+      - name: Prepare for Publish /0-arc/
+        continue-on-error: true
+        shell: bash
+        run: |
+          rclone_version=$(cat VERSION)
+          ls -lR >>rclone.lst
+          echo Create tar.xz archive
+          # create tar.xz with rclone* and manual
+          if [[ ${{ github.event.inputs.archive_tarxz == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            tar -cv --exclude=*.tar* --exclude=*.go rclone* MANUAL.txt VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}.tar.xz
+            ls ./0-arc/*
+          fi
+          # create tar.xz with all files
+          if [[ ${{ github.event.inputs.archive_all == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            tar -cv --exclude=*.tar* --exclude=./0-arc/* . | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}-all.tar.xz
+            ls ./0-arc/*
+          fi
+          # create tar.xz with zip files found
+          if [[ ${{ github.event.inputs.archive_zips == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            find . \( -name "*.zip" \) -print > ./0-arc/zipfiles.txt
+            echo ./MANUAL.* >> ./0-arc/zipfiles.txt
+            echo ./VERSION >> ./0-arc/zipfiles.txt
+            tar -cv -I ./0-arc/zipfiles.txt | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}-zips.tar.xz
+            ls ./0-arc/*
+          fi
+          echo Done tar.
+        env:
+          RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
+        # working-directory: '$(modulePath)'
+        # Deploy binaries if enabled in config && not a PR && not a fork
+        #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
+
+      - name: Publish Release ARCXZ
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_ARCXZ }}
+          files: |
+            ./0-arc/*
+            VERSION
 
   lint:
     if: ${{ github.event.inputs.manual == 'true' || (github.repository == 'rclone/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
@@ -346,10 +444,81 @@ jobs:
       - name: x64 build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-x64 .
 
-      - name: Upload artifacts
+      - name: Set env.VERSION
+        continue-on-error: true
+        shell: bash
         run: |
-          make ci_upload
+          rclone_version=$(cat VERSION)
+          echo "VERSION=$rclone_version" >> $GITHUB_ENV
+
+      - name: Prepare artifacts for Release /0-arc/
+        continue-on-error: true
+        run: |
+          rclone_version=$(cat VERSION)
+
+          ls -lR >>rclone.lst
+
+          echo Create tar.xz archive
+
+          # create tar.xz with rclone* and manual
+          if [[ ${{ github.event.inputs.archive_tarxz == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            tar -cv --exclude=*.tar* --exclude=*.go ./build/. rclone* MANUAL.txt VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android.tar.xz
+            ls ./0-arc/*
+          fi
+
+          # create tar.xz with all files
+          if [[ ${{ github.event.inputs.archive_all == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            tar -cv --exclude=*.tar* --exclude=./0-arc/* . | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android-all.tar.xz
+            ls ./0-arc/*
+          fi
+
+          # create tar.xz with zip files found
+          if [[ ${{ github.event.inputs.archive_zips == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            find . \( -name "*.zip" \) -print > ./0-arc/zipfiles.txt
+            echo ./MANUAL.* >> ./0-arc/zipfiles.txt
+            echo ./VERSION >> ./0-arc/zipfiles.txt
+            tar -cv -I ./0-arc/zipfiles.txt | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android-zips.tar.xz
+            ls ./0-arc/*
+          fi
+
+          echo Done tar.
         env:
           RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
         # Upload artifacts if not a PR && not a fork
-        if: env.RCLONE_CONFIG_PASS != '' && github.head_ref == '' && github.repository == 'rclone/rclone'
+        #if: env.RCLONE_CONFIG_PASS != '' && github.head_ref == '' && github.repository == 'rclone/rclone'
+
+      - name: Publish Release latest
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_LATEST }}
+          files: |
+            *latest*.zip
+            build/*latest*.zip
+            build/*android*.zip
+            build/*android*
+
+      - name: Publish Release beta
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.VERSION }}
+          files: |
+            *beta.*.zip
+            build/*beta.*.zip
+            build/*android*.zip
+            build/*android*
+
+      - name: Publish Release ARCXZ
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_ARCXZ }}
+          files: |
+            ./0-arc/*
