@@ -3,7 +3,7 @@
 # -*- compile-command: "yamllint -f parsable build.yml" -*-
 
 name: act-build-release
-# date: 2023.05.13 08:00
+# date: 2023.05.13 08:10
 
 # Trigger the workflow on push or pull request
 on:
@@ -38,6 +38,7 @@ on:
 
 env:
   TAG_NAME_ARCXZ: release-ARCXZ
+  TAG_NAME_RELEASE: release
   TAG_NAME_BETA: release-beta
   TAG_NAME_LATEST: release-latest
   PROG_NAME: rclone
@@ -251,7 +252,7 @@ jobs:
         run: |
           rclone_version=$(cat VERSION)
           echo "PROG_VERSION=$rclone_version" >> $GITHUB_ENV
-          rclone_commit=$(shell git rev-list --count HEAD).$(shell git show --no-patch --no-notes --pretty='%h' HEAD)
+          rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
           echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
 
       - name: Prepare for Publish /0-arc/
@@ -305,12 +306,24 @@ jobs:
             *latest*.zip
             build/*latest*.zip
 
+      - name: Publish Release version
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v1
+        with:
+          draft: true
+          # tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}
+          tag_name: ${{ env.TAG_NAME_RELEASE }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
+          files: |
+            *beta.*.zip
+            build/*beta.*.zip
+
       - name: Publish Release beta
         continue-on-error: true
         uses: deep-soft/action-gh-release@v1
         with:
           draft: true
-          tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}
+          # tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}
+          tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
           files: |
             *beta.*.zip
             build/*beta.*.zip
@@ -457,7 +470,7 @@ jobs:
         run: |
           rclone_version=$(cat VERSION)
           echo "PROG_VERSION=$rclone_version" >> $GITHUB_ENV
-          rclone_commit=$(shell git rev-list --count HEAD).$(shell git show --no-patch --no-notes --pretty='%h' HEAD)
+          rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
           echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
 
       - name: Prepare artifacts for Release /0-arc/
@@ -517,7 +530,7 @@ jobs:
         with:
           draft: true
           # tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}
-          tag_name: ${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
+          tag_name: ${{ env.TAG_NAME_RELEASE }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
           files: |
             *beta.*.zip
             build/*beta.*.zip
