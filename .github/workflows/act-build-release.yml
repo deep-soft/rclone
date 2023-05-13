@@ -191,9 +191,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/go/pkg/mod
-          key: ${{ job_name }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ matrix.job_name }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ job_name }}-go-
+            ${{ matrix.job_name }}-go-
 
       - name: Build rclone
         shell: bash
@@ -388,9 +388,9 @@ jobs:
         uses: actions/cache@v3
         with:
           path: ~/go/pkg/mod
-          key: ${{ job_name }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ matrix.job_name }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            ${{ job_name }}-go-
+            ${{ matrix.job_name }}-go-
 
       - name: Set global environment variables
         shell: bash
