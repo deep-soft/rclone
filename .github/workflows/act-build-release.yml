@@ -3,7 +3,7 @@
 # -*- compile-command: "yamllint -f parsable build.yml" -*-
 
 name: act-build-release
-# date: 2023.05.13 08:30
+# date: 2023.05.13 09:00
 
 # Trigger the workflow on push or pull request
 on:
@@ -195,6 +195,20 @@ jobs:
           restore-keys: |
             ${{ matrix.job_name }}-go-
 
+      - name: Set global environment variables
+        shell: bash
+        run: |
+          echo "VERSION=$(make version)" >> $GITHUB_ENV
+
+      - name: Set env.PROG_VERSION
+        continue-on-error: true
+        shell: bash
+        run: |
+          rclone_version=$(cat VERSION)
+          echo "PROG_VERSION=$rclone_version" >> $GITHUB_ENV
+          rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
+          echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
+
       - name: Build rclone
         shell: bash
         run: |
@@ -246,17 +260,13 @@ jobs:
         #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
         if: matrix.deploy
 
-      - name: Set env.PROG_VERSION
-        continue-on-error: true
-        shell: bash
-        run: |
-          rclone_version=$(cat VERSION)
-          echo "PROG_VERSION=$rclone_version" >> $GITHUB_ENV
-          rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
-          echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
-
       - name: Prepare for Publish /0-arc/
         continue-on-error: true
+        env:
+          RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
+        # working-directory: '$(modulePath)'
+        # Deploy binaries if enabled in config && not a PR && not a fork
+        #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
         shell: bash
         run: |
           rclone_version=$(cat VERSION)
@@ -290,11 +300,6 @@ jobs:
           fi
 
           echo Done tar.
-        env:
-          RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
-        # working-directory: '$(modulePath)'
-        # Deploy binaries if enabled in config && not a PR && not a fork
-        #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
 
       - name: Publish Release latest
         continue-on-error: true
@@ -397,6 +402,15 @@ jobs:
         run: |
           echo "VERSION=$(make version)" >> $GITHUB_ENV
 
+      - name: Set env.PROG_VERSION
+        continue-on-error: true
+        shell: bash
+        run: |
+          rclone_version=$(cat VERSION)
+          echo "PROG_VERSION=$rclone_version" >> $GITHUB_ENV
+          rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
+          echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
+
       - name: build native rclone
         run: |
           make
@@ -464,17 +478,30 @@ jobs:
       - name: x64 build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-x64 .
 
-      - name: Set env.PROG_VERSION
+      - name: Deploy built binaries
         continue-on-error: true
+        env:
+          RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
+        # working-directory: '$(modulePath)'
+        # Deploy binaries if enabled in config && not a PR && not a fork
+        #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
+        if: matrix.deploy
         shell: bash
         run: |
-          rclone_version=$(cat VERSION)
-          echo "PROG_VERSION=$rclone_version" >> $GITHUB_ENV
-          rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
-          echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
+          pushd build
+          zip -9 rclone-android-${RCLONE_NDK_VERSION}-armv7a-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}.zip rclone-android-${RCLONE_NDK_VERSION}-armv7a
+          zip -9 rclone-android-${RCLONE_NDK_VERSION}-armv8a-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}.zip rclone-android-${RCLONE_NDK_VERSION}-armv8a
+          zip -9 rclone-android-${RCLONE_NDK_VERSION}-x86-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}.zip rclone-android-${RCLONE_NDK_VERSION}-x86
+          zip -9 rclone-android-${RCLONE_NDK_VERSION}-x64-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}.zip rclone-android-${RCLONE_NDK_VERSION}-x64
+          popd
 
       - name: Prepare artifacts for Release /0-arc/
         continue-on-error: true
+        env:
+          RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
+        # Upload artifacts if not a PR && not a fork
+        #if: env.RCLONE_CONFIG_PASS != '' && github.head_ref == '' && github.repository == 'rclone/rclone'
+        shell: bash
         run: |
           rclone_version=$(cat VERSION)
 
@@ -507,10 +534,6 @@ jobs:
           fi
 
           echo Done tar.
-        env:
-          RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
-        # Upload artifacts if not a PR && not a fork
-        #if: env.RCLONE_CONFIG_PASS != '' && github.head_ref == '' && github.repository == 'rclone/rclone'
 
       - name: Publish Release latest
         continue-on-error: true
