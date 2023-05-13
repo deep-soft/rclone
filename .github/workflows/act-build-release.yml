@@ -3,7 +3,7 @@
 # -*- compile-command: "yamllint -f parsable build.yml" -*-
 
 name: act-build-release
-# date: 2023.05.13 09:30
+# date: 2023.05.13 09:50
 
 # Trigger the workflow on push or pull request
 on:
@@ -26,7 +26,7 @@ on:
         required: true
         default: true
       build_android:
-        description: Build Android
+        description: Build And
         type: boolean
         required: true
         default: true
@@ -57,7 +57,7 @@ env:
 
 jobs:
   build:
-    if: ${{ github.event.inputs.build_win_lin_mac == 'true' || github.event.inputs.manual == 'true' || (github.repository == 'rclone/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
+    if: ${{ (github.event.inputs.build_win_lin_mac == 'true') && (github.event.inputs.manual == 'true' || (github.repository == 'rclone/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name))) }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -382,7 +382,7 @@ jobs:
         run: govulncheck ./...
 
   android:
-    if: ${{ github.event.inputs.build_android == 'true' || github.event.inputs.manual == 'true' || (github.repository == 'rclone/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
+    if: ${{ (github.event.inputs.build_android == 'true') && (github.event.inputs.manual == 'true' || (github.repository == 'rclone/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name))) }}
     timeout-minutes: 30
     name: "android-all"
     runs-on: ubuntu-latest
@@ -499,10 +499,10 @@ jobs:
         shell: bash
         run: |
           pushd build
-          zip -m -9 rclone-android-${RCLONE_NDK_VERSION}-armv7a-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}.zip rclone-android-${RCLONE_NDK_VERSION}-armv7a
-          zip -m -9 rclone-android-${RCLONE_NDK_VERSION}-armv8a-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}.zip rclone-android-${RCLONE_NDK_VERSION}-armv8a
-          zip -m -9 rclone-android-${RCLONE_NDK_VERSION}-x86-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}.zip rclone-android-${RCLONE_NDK_VERSION}-x86
-          zip -m -9 rclone-android-${RCLONE_NDK_VERSION}-x64-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}.zip rclone-android-${RCLONE_NDK_VERSION}-x64
+          zip -m -9 rclone-android-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-${RCLONE_NDK_VERSION}-armv7a.zip rclone-android-${RCLONE_NDK_VERSION}-armv7a
+          zip -m -9 rclone-android-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-${RCLONE_NDK_VERSION}-armv8a.zip rclone-android-${RCLONE_NDK_VERSION}-armv8a
+          zip -m -9 rclone-android-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-${RCLONE_NDK_VERSION}-x86.zip    rclone-android-${RCLONE_NDK_VERSION}-x86
+          zip -m -9 rclone-android-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-${RCLONE_NDK_VERSION}-x64.zip    rclone-android-${RCLONE_NDK_VERSION}-x64
           popd
 
       - name: Prepare artifacts for Release /0-arc/
