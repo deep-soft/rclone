@@ -3,7 +3,7 @@
 # -*- compile-command: "yamllint -f parsable build.yml" -*-
 
 name: act-build-release
-# date: 2023.05.13 14:00
+# date: 2023.05.13 14:30
 
 # Trigger the workflow on push or pull request
 on:
@@ -334,8 +334,8 @@ jobs:
           draft: true
           tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
           files: |
-            *beta*.zip
-            build/*beta*.zip
+            *beta.*.zip
+            build/*beta.*.zip
 
       - name: Publish Release ARCXZ
         continue-on-error: true
@@ -498,10 +498,10 @@ jobs:
           zip -m -9 rclone-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-armv8a.zip rclone-android-${RCLONE_NDK_VERSION}-armv8a
           zip -m -9 rclone-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x86.zip    rclone-android-${RCLONE_NDK_VERSION}-x86
           zip -m -9 rclone-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x64.zip    rclone-android-${RCLONE_NDK_VERSION}-x64
-          cp rclone-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-armv7a.zip rclone-beta-latest-${RCLONE_NDK_VERSION}-armv7a.zip
-          cp rclone-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-armv8a.zip rclone-beta-latest-${RCLONE_NDK_VERSION}-armv8a.zip
-          cp rclone-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x86.zip    rclone-beta-latest-${RCLONE_NDK_VERSION}-x86.zip
-          cp rclone-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x64.zip    rclone-beta-latest-${RCLONE_NDK_VERSION}-x64.zip
+          cp rclone-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-armv7a.zip rclone-beta-latest-android-${RCLONE_NDK_VERSION}-armv7a.zip
+          cp rclone-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-armv8a.zip rclone-beta-latest-android-${RCLONE_NDK_VERSION}-armv8a.zip
+          cp rclone-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x86.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x86.zip
+          cp rclone-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x64.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x64.zip
           popd
 
       - name: Prepare artifacts for Release /0-arc/
@@ -565,8 +565,8 @@ jobs:
           draft: true
           tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
           files: |
-            *beta*.zip
-            build/*beta*.zip
+            *beta.*.zip
+            build/*beta.*.zip
 
       - name: Publish Release ARCXZ
         continue-on-error: true
