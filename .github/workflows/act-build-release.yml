@@ -3,7 +3,8 @@
 # -*- compile-command: "yamllint -f parsable build.yml" -*-
 
 name: act-build-release
-# date: 2023.05.13 14:40
+# date: 2023.07.18 06:00
+# remove go.1.18
 
 # Trigger the workflow on push or pull request
 on:
@@ -62,7 +63,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        job_name: ['linux', 'linux_386', 'mac_amd64', 'mac_arm64', 'windows', 'other_os', 'go1.18', 'go1.19']
+        job_name: ['linux', 'linux_386', 'mac_amd64', 'mac_arm64', 'windows', 'other_os', 'go1.19']
+        #job_name: ['linux', 'linux_386', 'mac_amd64', 'mac_arm64', 'windows', 'other_os', 'go1.18', 'go1.19']
 
         include:
           - job_name: linux
@@ -117,12 +119,12 @@ jobs:
             compile_all: true
             deploy: true
 
-          - job_name: go1.18
-            os: ubuntu-latest
-            go: '1.18'
-            quicktest: true
-            racequicktest: true
-            deploy: false
+#          - job_name: go1.18
+#            os: ubuntu-latest
+#            go: '1.18'
+#            quicktest: true
+#            racequicktest: true
+#            deploy: false
 
           - job_name: go1.19
             os: ubuntu-latest
