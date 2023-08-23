@@ -541,7 +541,6 @@ put them back in again.` >}}
   * Chris Nelson <stuff@cjnaz.com>
   * Felix Bünemann <felix.buenemann@gmail.com>
   * Atílio Antônio <atiliodadalto@hotmail.com>
-  * Roberto Ricci <ricci@disroot.org>
   * Carlo Mion <mion00@gmail.com>
   * Chris Lu <chris.lu@gmail.com>
   * Vitor Arruda <vitor.pimenta.arruda@gmail.com>
@@ -766,3 +765,4 @@ put them back in again.` >}}
   * Vitor Gomes <vitor.gomes@delivion.de> <mail@vitorgomes.com>
   * Jacob Hands <jacob@gogit.io>
   * hideo aoyama <100831251+boukendesho@users.noreply.github.com>
+  * Roberto Ricci <io@r-ricci.it>
