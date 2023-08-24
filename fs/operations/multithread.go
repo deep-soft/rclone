@@ -9,35 +9,15 @@ import (
 
 	"github.com/rclone/rclone/fs"
 	"github.com/rclone/rclone/fs/accounting"
+	"github.com/rclone/rclone/lib/atexit"
+	"github.com/rclone/rclone/lib/multipart"
 	"github.com/rclone/rclone/lib/readers"
 	"golang.org/x/sync/errgroup"
-	"golang.org/x/sync/semaphore"
 )
 
 const (
 	multithreadChunkSize = 64 << 10
 )
-
-// An offsetWriter maps writes at offset base to offset base+off in the underlying writer.
-//
-// Modified from the go source code. Can be replaced with
-// io.OffsetWriter when we no longer need to support go1.19
-type offsetWriter struct {
-	w   io.WriterAt
-	off int64 // the current offset
-}
-
-// newOffsetWriter returns an offsetWriter that writes to w
-// starting at offset off.
-func newOffsetWriter(w io.WriterAt, off int64) *offsetWriter {
-	return &offsetWriter{w, off}
-}
-
-func (o *offsetWriter) Write(p []byte) (n int, err error) {
-	n, err = o.w.WriteAt(p, o.off)
-	o.off += int64(n)
-	return
-}
 
 // Return a boolean as to whether we should use multi thread copy for
 // this transfer
@@ -80,6 +60,7 @@ type multiThreadCopyState struct {
 	acc       *accounting.Account
 	streams   int
 	numChunks int
+	noSeek    bool // set if sure the receiving fs won't seek the input
 }
 
 // Copy a single stream into place
@@ -97,19 +78,37 @@ func (mc *multiThreadCopyState) copyStream(ctx context.Context, stream int, writ
 	if end > mc.size {
 		end = mc.size
 	}
+	size := end - start
 
-	fs.Debugf(mc.src, "multi-thread copy: stream %d/%d (%d-%d) size %v starting", stream+1, mc.numChunks, start, end, fs.SizeSuffix(end-start))
+	fs.Debugf(mc.src, "multi-thread copy: stream %d/%d (%d-%d) size %v starting", stream+1, mc.numChunks, start, end, fs.SizeSuffix(size))
 
 	rc, err := Open(ctx, mc.src, &fs.RangeOption{Start: start, End: end - 1})
 	if err != nil {
-		return fmt.Errorf("multipart copy: failed to open source: %w", err)
+		return fmt.Errorf("multi-thread copy: failed to open source: %w", err)
 	}
 	defer fs.CheckClose(rc, &err)
 
-	bytesWritten, err := writer.WriteChunk(stream, readers.NewRepeatableReader(rc))
-	if err != nil {
-		return err
+	var rs io.ReadSeeker
+	if mc.noSeek {
+		// Read directly if we are sure we aren't going to seek
+		rs = readers.NoSeeker{Reader: rc}
+	} else {
+		// Read the chunk into buffered reader
+		wr := multipart.NewRW()
+		defer fs.CheckClose(wr, &err)
+		_, err = io.CopyN(wr, rc, size)
+		if err != nil {
+			return fmt.Errorf("multi-thread copy: failed to read chunk: %w", err)
+		}
+		rs = wr
 	}
+
+	// Write the chunk
+	bytesWritten, err := writer.WriteChunk(ctx, stream, rs)
+	if err != nil {
+		return fmt.Errorf("multi-thread copy: failed to write chunk: %w", err)
+	}
+
 	// FIXME: Wrap ReadSeeker for Accounting
 	// However, to ensure reporting is correctly seeks have to be handled properly
 	errAccRead := mc.acc.AccountRead(int(bytesWritten))
@@ -128,7 +127,6 @@ func calculateNumChunks(size int64, chunkSize int64) int {
 	if size%chunkSize != 0 {
 		numChunks++
 	}
-
 	return int(numChunks)
 }
 
@@ -140,7 +138,7 @@ func multiThreadCopy(ctx context.Context, f fs.Fs, remote string, src fs.Object,
 	if openChunkWriter == nil {
 		openWriterAt := f.Features().OpenWriterAt
 		if openWriterAt == nil {
-			return nil, errors.New("multi-part copy: neither OpenChunkWriter nor OpenWriterAt supported")
+			return nil, errors.New("multi-thread copy: neither OpenChunkWriter nor OpenWriterAt supported")
 		}
 		openChunkWriter = openChunkWriterFromOpenWriterAt(openWriterAt, int64(ci.MultiThreadChunkSize), int64(ci.MultiThreadWriteBufferSize), f)
 	}
@@ -153,7 +151,20 @@ func multiThreadCopy(ctx context.Context, f fs.Fs, remote string, src fs.Object,
 	}
 
 	g, gCtx := errgroup.WithContext(ctx)
+	g.SetLimit(streams)
+
 	chunkSize, chunkWriter, err := openChunkWriter(ctx, remote, src)
+	if err != nil {
+		return nil, fmt.Errorf("multi-thread copy: failed to open chunk writer: %w", err)
+	}
+
+	defer atexit.OnError(&err, func() {
+		fs.Debugf(src, "multi-thread copy: aborting transfer on exit")
+		abortErr := chunkWriter.Abort(ctx)
+		if abortErr != nil {
+			fs.Debugf(src, "multi-thread copy: abort failed: %v", abortErr)
+		}
+	})()
 
 	if chunkSize > src.Size() {
 		fs.Debugf(src, "multi-thread copy: chunk size %v was bigger than source file size %v", fs.SizeSuffix(chunkSize), fs.SizeSuffix(src.Size()))
@@ -173,32 +184,26 @@ func multiThreadCopy(ctx context.Context, f fs.Fs, remote string, src fs.Object,
 		partSize:  chunkSize,
 		streams:   streams,
 		numChunks: numChunks,
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("multipart copy: failed to open chunk writer: %w", err)
+		noSeek:    f.Features().PartialUploads,
 	}
 
 	// Make accounting
 	mc.acc = tr.Account(ctx, nil)
 
 	fs.Debugf(src, "Starting multi-thread copy with %d parts of size %v with %v parallel streams", mc.numChunks, fs.SizeSuffix(mc.partSize), mc.streams)
-	sem := semaphore.NewWeighted(int64(mc.streams))
 	for chunk := 0; chunk < mc.numChunks; chunk++ {
-		fs.Debugf(src, "Acquiring semaphore...")
-		if err := sem.Acquire(ctx, 1); err != nil {
-			fs.Errorf(src, "Failed to acquire semaphore: %v", err)
+		// Fail fast, in case an errgroup managed function returns an error
+		if gCtx.Err() != nil {
 			break
 		}
-		currChunk := chunk
-		g.Go(func() (err error) {
-			defer sem.Release(1)
-			return mc.copyStream(gCtx, currChunk, chunkWriter)
+		chunk := chunk
+		g.Go(func() error {
+			return mc.copyStream(gCtx, chunk, chunkWriter)
 		})
 	}
 
 	err = g.Wait()
-	closeErr := chunkWriter.Close()
+	closeErr := chunkWriter.Close(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -224,8 +229,29 @@ func multiThreadCopy(ctx context.Context, f fs.Fs, remote string, src fs.Object,
 	return obj, nil
 }
 
+// An offsetWriter maps writes at offset base to offset base+off in the underlying writer.
+//
+// Modified from the go source code. Can be replaced with
+// io.OffsetWriter when we no longer need to support go1.19
+type offsetWriter struct {
+	w   io.WriterAt
+	off int64 // the current offset
+}
+
+// newOffsetWriter returns an offsetWriter that writes to w
+// starting at offset off.
+func newOffsetWriter(w io.WriterAt, off int64) *offsetWriter {
+	return &offsetWriter{w, off}
+}
+
+func (o *offsetWriter) Write(p []byte) (n int, err error) {
+	n, err = o.w.WriteAt(p, o.off)
+	o.off += int64(n)
+	return
+}
+
+// writerAtChunkWriter converts a WriterAtCloser into a ChunkWriter
 type writerAtChunkWriter struct {
-	ctx             context.Context
 	remote          string
 	size            int64
 	writerAt        fs.WriterAtCloser
@@ -235,7 +261,8 @@ type writerAtChunkWriter struct {
 	f               fs.Fs
 }
 
-func (w writerAtChunkWriter) WriteChunk(chunkNumber int, reader io.ReadSeeker) (int64, error) {
+// WriteChunk writes chunkNumber from reader
+func (w writerAtChunkWriter) WriteChunk(ctx context.Context, chunkNumber int, reader io.ReadSeeker) (int64, error) {
 	fs.Debugf(w.remote, "writing chunk %v", chunkNumber)
 
 	bytesToWrite := w.chunkSize
@@ -254,30 +281,33 @@ func (w writerAtChunkWriter) WriteChunk(chunkNumber int, reader io.ReadSeeker) (
 	if n != bytesToWrite {
 		return -1, fmt.Errorf("expected to write %v bytes for chunk %v, but wrote %v bytes", bytesToWrite, chunkNumber, n)
 	}
-	// if we were buffering, flush do disk
+	// if we were buffering, flush to disk
 	switch w := writer.(type) {
 	case *bufio.Writer:
 		er2 := w.Flush()
 		if er2 != nil {
-			return -1, fmt.Errorf("multipart copy: flush failed: %w", err)
+			return -1, fmt.Errorf("multi-thread copy: flush failed: %w", err)
 		}
 	}
 	return n, nil
 }
 
-func (w writerAtChunkWriter) Close() error {
+// Close the chunk writing
+func (w writerAtChunkWriter) Close(ctx context.Context) error {
 	return w.writerAt.Close()
 }
 
-func (w writerAtChunkWriter) Abort() error {
-	obj, err := w.f.NewObject(w.ctx, w.remote)
+// Abort the chunk writing
+func (w writerAtChunkWriter) Abort(ctx context.Context) error {
+	obj, err := w.f.NewObject(ctx, w.remote)
 	if err != nil {
 		return fmt.Errorf("multi-thread copy: failed to find temp file when aborting chunk writer: %w", err)
 	}
-	return obj.Remove(w.ctx)
+	return obj.Remove(ctx)
 }
 
-func openChunkWriterFromOpenWriterAt(openWriterAt func(ctx context.Context, remote string, size int64) (fs.WriterAtCloser, error), chunkSize int64, writeBufferSize int64, f fs.Fs) func(ctx context.Context, remote string, src fs.ObjectInfo, options ...fs.OpenOption) (chunkSizeResult int64, writer fs.ChunkWriter, err error) {
+// openChunkWriterFromOpenWriterAt adapts an OpenWriterAtFn into an OpenChunkWriterFn using chunkSize and writeBufferSize
+func openChunkWriterFromOpenWriterAt(openWriterAt fs.OpenWriterAtFn, chunkSize int64, writeBufferSize int64, f fs.Fs) fs.OpenChunkWriterFn {
 	return func(ctx context.Context, remote string, src fs.ObjectInfo, options ...fs.OpenOption) (chunkSizeResult int64, writer fs.ChunkWriter, err error) {
 		writerAt, err := openWriterAt(ctx, remote, src.Size())
 		if err != nil {
@@ -289,7 +319,6 @@ func openChunkWriterFromOpenWriterAt(openWriterAt func(ctx context.Context, remo
 		}
 
 		chunkWriter := &writerAtChunkWriter{
-			ctx:             ctx,
 			remote:          remote,
 			size:            src.Size(),
 			chunkSize:       chunkSize,
