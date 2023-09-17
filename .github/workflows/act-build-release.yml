@@ -3,8 +3,8 @@
 # -*- compile-command: "yamllint -f parsable build.yml" -*-
 
 name: act-build-release
-# date: 2023.07.18 06:00
-# remove go.1.18
+# date: 2023.09.17 19:00
+# go.1.21
 
 # Trigger the workflow on push or pull request
 on:
@@ -69,7 +69,7 @@ jobs:
         include:
           - job_name: linux
             os: ubuntu-latest
-            go: '1.21.0-rc.4'
+            go: '1.21'
             gotags: cmount
             build_flags: '-include "^linux/"'
             check: true
@@ -80,7 +80,7 @@ jobs:
 
           - job_name: linux_386
             os: ubuntu-latest
-            go: '1.21.0-rc.4'
+            go: '1.21'
             goarch: 386
             gotags: cmount
             quicktest: true
@@ -88,7 +88,7 @@ jobs:
 
           - job_name: mac_amd64
             os: macos-11
-            go: '1.21.0-rc.4'
+            go: '1.21'
             gotags: 'cmount'
             build_flags: '-include "^darwin/amd64" -cgo'
             quicktest: true
@@ -97,14 +97,14 @@ jobs:
 
           - job_name: mac_arm64
             os: macos-11
-            go: '1.21.0-rc.4'
+            go: '1.21'
             gotags: 'cmount'
             build_flags: '-include "^darwin/arm64" -cgo -macos-arch arm64 -cgo-cflags=-I/usr/local/include -cgo-ldflags=-L/usr/local/lib'
             deploy: true
 
           - job_name: windows
             os: windows-latest
-            go: '1.21.0-rc.4'
+            go: '1.21'
             gotags: cmount
             cgo: '0'
             build_flags: '-include "^windows/"'
@@ -114,7 +114,7 @@ jobs:
 
           - job_name: other_os
             os: ubuntu-latest
-            go: '1.21.0-rc.4'
+            go: '1.21'
             build_flags: '-exclude "^(windows/|darwin/|linux/)"'
             compile_all: true
             deploy: true
@@ -369,7 +369,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21.0-rc.4'
+          go-version: '1.21'
           check-latest: true
 
       - name: Install govulncheck
@@ -394,7 +394,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21.0-rc.4'
+          go-version: '1.21'
 
       - name: Go module cache
         uses: actions/cache@v3
