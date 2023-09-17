@@ -3,8 +3,8 @@
 # -*- compile-command: "yamllint -f parsable build.yml" -*-
 
 name: act-build-release
-# date: 2023.07.18 06:00
-# remove go.1.18
+# date: 2023.09.17 19:00
+# go.1.21
 
 # Trigger the workflow on push or pull request
 on:
