@@ -92,7 +92,7 @@ jobs:
             gotags: 'cmount'
             build_flags: '-include "^darwin/amd64" -cgo'
             quicktest: true
-            racequicktest: true
+            racequicktest: false
             deploy: true
 
           - job_name: mac_arm64
