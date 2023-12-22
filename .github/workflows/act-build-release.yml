@@ -3,7 +3,9 @@
 # -*- compile-command: "yamllint -f parsable build.yml" -*-
 
 name: act-build-release
-# date: 2023.09.17 19:00
+# act-build-release.yml
+# date: 2023.12.22 20:30
+# Patch makefile, remove rclone --config bin/travis.rclone.conf
 # go.1.21
 
 # Trigger the workflow on push or pull request
@@ -16,8 +18,13 @@ on:
 #  pull_request:
   workflow_dispatch:
     inputs:
-      manual:
-        description: Manual run (bypass default conditions)
+#      manual:
+#        description: Manual run (bypass default conditions)
+#        type: boolean
+#        required: true
+#        default: true
+      lint:
+        description: lint
         type: boolean
         required: true
         default: true
@@ -58,7 +65,8 @@ env:
 
 jobs:
   build:
-    if: ${{ (github.event.inputs.build_win_lin_mac == 'true') && (github.event.inputs.manual == 'true') }}
+    if: ${{ inputs.build_win_lin_mac }}
+    # if: ${{ (github.event.inputs.build_win_lin_mac == 'true') && (github.event.inputs.manual == 'true') }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -135,7 +143,6 @@ jobs:
 
     name: ${{ matrix.job_name }}
     runs-on: ${{ matrix.os }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -260,6 +267,16 @@ jobs:
           make compile_all
         if: matrix.compile_all
 
+      - name: Patch makefile, remove rclone --config bin/travis.rclone.conf
+        shell: bash
+        run: |
+          echo "grep before:"
+          grep "rclone --" Makefile 
+          sed -ibak "s!rclone --config bin/travis.rclone.conf!echo rclone --config bin/travis.rclone.conf!" Makefile
+          sed -ibak "s!./echo rclone !echo rclone !" Makefile
+          echo "grep after:"
+          grep "rclone --" Makefile 
+
       - name: Deploy built binaries
         # working-directory: '$(modulePath)'
         # Deploy binaries if enabled in config && not a PR && not a fork
@@ -349,7 +366,8 @@ jobs:
             ./0-arc/*
 
   lint:
-    if: ${{ github.event.inputs.manual == 'true' || (github.repository == 'deep-soft/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
+    if: ${{ inputs.lint }}
+    # if: ${{ github.event.inputs.manual == 'true' || (github.repository == 'deep-soft/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
 
     timeout-minutes: 30
     name: "lint"
@@ -379,7 +397,8 @@ jobs:
         run: govulncheck ./...
 
   android:
-    if: ${{ (github.event.inputs.build_android == 'true') && (github.event.inputs.manual == 'true') }}
+    if: ${{ inputs.build_android }}
+    #if: ${{ (github.event.inputs.build_android == 'true') && (github.event.inputs.manual == 'true') }}
     timeout-minutes: 30
     name: "android-all"
     runs-on: ubuntu-latest
