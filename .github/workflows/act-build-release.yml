@@ -4,7 +4,7 @@
 
 name: act-build-release
 # act-build-release.yml
-# date: 2023.12.22 20:30
+# date: 2024.01.05 10:10
 # Patch makefile, remove rclone --config bin/travis.rclone.conf
 # go.1.21
 
@@ -436,6 +436,7 @@ jobs:
           echo "PROG_VERSION=$rclone_version" >> $GITHUB_ENV
           rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
           echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
+          echo "${{ env.PROG_NAME }}-$rclone_version-$rclone_commit" > ${{github.workspace}}/_version_.txt
 
       - name: build native rclone
         run: |
@@ -568,6 +569,7 @@ jobs:
           files: |
             *latest*.zip
             build/*latest*.zip
+            ${{github.workspace}}/_version_.txt
 
       - name: Publish Release version
         continue-on-error: true
@@ -578,6 +580,7 @@ jobs:
           files: |
             *release*.*.zip
             build/*release*android*.zip
+            ${{github.workspace}}/_version_.txt
 
       - name: Publish Release beta
         continue-on-error: true
@@ -588,6 +591,7 @@ jobs:
           files: |
             *beta.*.zip
             build/*beta.*.zip
+            ${{github.workspace}}/_version_.txt
 
       - name: Publish Release ARCXZ
         continue-on-error: true
@@ -597,3 +601,4 @@ jobs:
           tag_name: ${{ env.TAG_NAME_ARCXZ }}
           files: |
             ./0-arc/*
+            ${{github.workspace}}/_version_.txt
