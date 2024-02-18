@@ -4,7 +4,7 @@
 
 name: act-build-release
 # act-build-release.yml
-# date: 2024.01.21 08:10
+# date: 2024.02.18 08:30
 # go >=1.22.0-rc.1
 # Patch makefile, remove rclone --config bin/travis.rclone.conf
 
@@ -146,12 +146,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: deep-soft/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: deep-soft/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           check-latest: true
@@ -210,7 +210,7 @@ jobs:
           env
 
       - name: Go module cache
-        uses: actions/cache@v4
+        uses: deep-soft/cache@v4
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -329,7 +329,7 @@ jobs:
 
       - name: Publish Release latest
         continue-on-error: true
-        uses: deep-soft/action-gh-release@v1
+        uses: deep-soft/action-gh-release@v2.1
         with:
           draft: true
           tag_name: ${{ env.TAG_NAME_LATEST }}
@@ -339,7 +339,7 @@ jobs:
 
       - name: Publish Release version
         continue-on-error: true
-        uses: deep-soft/action-gh-release@v1
+        uses: deep-soft/action-gh-release@v2.1
         with:
           draft: true
           tag_name: ${{ env.TAG_NAME_RELEASE }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
@@ -349,7 +349,7 @@ jobs:
 
       - name: Publish Release beta
         continue-on-error: true
-        uses: deep-soft/action-gh-release@v1
+        uses: deep-soft/action-gh-release@v2.1
         with:
           draft: true
           tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
@@ -359,7 +359,7 @@ jobs:
 
       - name: Publish Release ARCXZ
         continue-on-error: true
-        uses: deep-soft/action-gh-release@v1
+        uses: deep-soft/action-gh-release@v2.1
         with:
           draft: true
           tag_name: ${{ env.TAG_NAME_ARCXZ }}
@@ -376,17 +376,17 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: deep-soft/checkout@v4
 
       - name: Code quality test
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@v4
         with:
           # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
           version: latest
 
       # Run govulncheck on the latest go version, the one we build binaries with
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: deep-soft/setup-go@v5
         with:
           go-version: '>=1.22.0-rc.1'
           check-latest: true
@@ -406,18 +406,18 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: deep-soft/checkout@v4
         with:
           fetch-depth: 0
 
       # Upgrade together with NDK version
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: deep-soft/setup-go@v5
         with:
           go-version: '>=1.22.0-rc.1'
 
       - name: Go module cache
-        uses: actions/cache@v4
+        uses: deep-soft/cache@v4
         with:
           path: ~/go/pkg/mod
           key: ${{ matrix.job_name }}-go-${{ hashFiles('**/go.sum') }}
@@ -563,7 +563,7 @@ jobs:
 
       - name: Publish Release latest
         continue-on-error: true
-        uses: deep-soft/action-gh-release@v1
+        uses: deep-soft/action-gh-release@v2.1
         with:
           draft: true
           tag_name: ${{ env.TAG_NAME_LATEST }}
@@ -574,7 +574,7 @@ jobs:
 
       - name: Publish Release version
         continue-on-error: true
-        uses: deep-soft/action-gh-release@v1
+        uses: deep-soft/action-gh-release@v2.1
         with:
           draft: true
           tag_name: ${{ env.TAG_NAME_RELEASE }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
@@ -585,7 +585,7 @@ jobs:
 
       - name: Publish Release beta
         continue-on-error: true
-        uses: deep-soft/action-gh-release@v1
+        uses: deep-soft/action-gh-release@v2.1
         with:
           draft: true
           tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
@@ -596,7 +596,7 @@ jobs:
 
       - name: Publish Release ARCXZ
         continue-on-error: true
-        uses: deep-soft/action-gh-release@v1
+        uses: deep-soft/action-gh-release@v2.1
         with:
           draft: true
           tag_name: ${{ env.TAG_NAME_ARCXZ }}
