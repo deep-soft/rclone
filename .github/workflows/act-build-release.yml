@@ -1,0 +1,605 @@
+---
+# Github Actions build for rclone
+# -*- compile-command: "yamllint -f parsable build.yml" -*-
+
+name: act-build-release
+# act-build-release.yml
+# date: 2024.02.18 08:30
+# go >=1.22.0-rc.1
+# Patch makefile, remove rclone --config bin/travis.rclone.conf
+
+# Trigger the workflow on push or pull request
+on:
+#  push:
+#    branches:
+#      - '**'
+#    tags:
+#      - '**'
+#  pull_request:
+  workflow_dispatch:
+    inputs:
+#      manual:
+#        description: Manual run (bypass default conditions)
+#        type: boolean
+#        required: true
+#        default: true
+      lint:
+        description: lint
+        type: boolean
+        required: true
+        default: true
+      build_win_lin_mac:
+        description: Build Win Lin Mac
+        type: boolean
+        required: true
+        default: true
+      build_android:
+        description: Build And
+        type: boolean
+        required: true
+        default: true
+      archive_tarxz:
+        description: Create tar.xz with rclone*
+        type: boolean
+        required: true
+        default: false
+      archive_zips:
+        description: Create tar.xz with with zip files found in folders
+        type: boolean
+        required: true
+        default: false
+      archive_all:
+        description: Create tar.xz with all files
+        type: boolean
+        required: true
+        default: false
+
+env:
+  TAG_NAME_ARCXZ: release-ARCXZ
+  TAG_NAME_RELEASE: release
+  TAG_NAME_BETA: release-beta
+  TAG_NAME_LATEST: release-latest
+  PROG_NAME: rclone
+  PROG_VERSION: v1.63.0
+  PROG_COMMIT: 0000.000000000
+
+jobs:
+  build:
+    if: ${{ inputs.build_win_lin_mac }}
+    # if: ${{ (github.event.inputs.build_win_lin_mac == 'true') && (github.event.inputs.manual == 'true') }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        job_name: ['linux', 'linux_386', 'mac_amd64', 'mac_arm64', 'windows', 'other_os', 'go1.20', 'go1.21']
+        #job_name: ['linux', 'linux_386', 'mac_amd64', 'mac_arm64', 'windows', 'other_os', 'go1.19']
+        #job_name: ['linux', 'linux_386', 'mac_amd64', 'mac_arm64', 'windows', 'other_os', 'go1.18', 'go1.19']
+
+        include:
+          - job_name: linux
+            os: ubuntu-latest
+            go: '>=1.22.0-rc.1'
+            gotags: cmount
+            build_flags: '-include "^linux/"'
+            check: true
+            quicktest: true
+            racequicktest: true
+            librclonetest: true
+            deploy: true
+
+          - job_name: linux_386
+            os: ubuntu-latest
+            go: '>=1.22.0-rc.1'
+            goarch: 386
+            gotags: cmount
+            quicktest: true
+            deploy: false
+
+          - job_name: mac_amd64
+            os: macos-11
+            go: '>=1.22.0-rc.1'
+            gotags: 'cmount'
+            build_flags: '-include "^darwin/amd64" -cgo'
+            quicktest: true
+            racequicktest: false
+            deploy: true
+
+          - job_name: mac_arm64
+            os: macos-11
+            go: '>=1.22.0-rc.1'
+            gotags: 'cmount'
+            build_flags: '-include "^darwin/arm64" -cgo -macos-arch arm64 -cgo-cflags=-I/usr/local/include -cgo-ldflags=-L/usr/local/lib'
+            deploy: true
+
+          - job_name: windows
+            os: windows-latest
+            go: '>=1.22.0-rc.1'
+            gotags: cmount
+            cgo: '0'
+            build_flags: '-include "^windows/"'
+            build_args: '-buildmode exe'
+            quicktest: true
+            deploy: true
+
+          - job_name: other_os
+            os: ubuntu-latest
+            go: '>=1.22.0-rc.1'
+            build_flags: '-exclude "^(windows/|darwin/|linux/)"'
+            compile_all: true
+            deploy: true
+
+          - job_name: go1.20
+            os: ubuntu-latest
+            go: '1.20'
+            quicktest: true
+            racequicktest: true
+            deploy: false
+
+          - job_name: go1.21
+            os: ubuntu-latest
+            go: '1.21'
+            quicktest: true
+            racequicktest: true
+            deploy: false
+
+    name: ${{ matrix.job_name }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: deep-soft/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Go
+        uses: deep-soft/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          check-latest: true
+
+      - name: Set environment variables
+        shell: bash
+        run: |
+          echo 'GOTAGS=${{ matrix.gotags }}' >> $GITHUB_ENV
+          echo 'BUILD_FLAGS=${{ matrix.build_flags }}' >> $GITHUB_ENV
+          echo 'BUILD_ARGS=${{ matrix.build_args }}' >> $GITHUB_ENV
+          if [[ "${{ matrix.goarch }}" != "" ]]; then echo 'GOARCH=${{ matrix.goarch }}' >> $GITHUB_ENV ; fi
+          if [[ "${{ matrix.cgo }}" != "" ]]; then echo 'CGO_ENABLED=${{ matrix.cgo }}' >> $GITHUB_ENV ; fi
+
+      - name: Install Libraries on Linux
+        shell: bash
+        run: |
+          sudo modprobe fuse
+          sudo chmod 666 /dev/fuse
+          sudo chown root:$USER /etc/fuse.conf
+          sudo apt-get install fuse3 libfuse-dev rpm pkg-config
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Install Libraries on macOS
+        shell: bash
+        run: |
+          brew update
+          brew install --cask macfuse
+        if: matrix.os == 'macos-11'
+
+      - name: Install Libraries on Windows
+        shell: powershell
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          choco install -y winfsp zip
+          echo "CPATH=C:\Program Files\WinFsp\inc\fuse;C:\Program Files (x86)\WinFsp\inc\fuse" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if ($env:GOARCH -eq "386") {
+            choco install -y mingw --forcex86 --force
+            echo "C:\\ProgramData\\chocolatey\\lib\\mingw\\tools\\install\\mingw32\\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+          # Copy mingw32-make.exe to make.exe so the same command line
+          # can be used on Windows as on macOS and Linux
+          $path = (get-command mingw32-make.exe).Path
+          Copy-Item -Path $path -Destination (Join-Path (Split-Path -Path $path) 'make.exe')
+        if: matrix.os == 'windows-latest'
+
+      - name: Print Go version and environment
+        shell: bash
+        run: |
+          printf "Using go at: $(which go)\n"
+          printf "Go version: $(go version)\n"
+          printf "\n\nGo environment:\n\n"
+          go env
+          printf "\n\nRclone environment:\n\n"
+          make vars
+          printf "\n\nSystem environment:\n\n"
+          env
+
+      - name: Go module cache
+        uses: deep-soft/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Set global environment variables
+        shell: bash
+        run: |
+          echo "VERSION=$(make version)" >> $GITHUB_ENV
+
+      - name: Set env.PROG_VERSION
+        continue-on-error: true
+        shell: bash
+        run: |
+          rclone_version=$(cat VERSION)
+          echo "PROG_VERSION=$rclone_version" >> $GITHUB_ENV
+          rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
+          echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
+
+      - name: Build rclone
+        shell: bash
+        run: |
+          make
+
+      - name: Rclone version
+        shell: bash
+        run: |
+          rclone version
+
+      - name: Run tests
+        shell: bash
+        run: |
+          make quicktest
+        if: matrix.quicktest
+
+      - name: Race test
+        shell: bash
+        run: |
+          make racequicktest
+        if: matrix.racequicktest
+
+      - name: Run librclone tests
+        shell: bash
+        run: |
+          make -C librclone/ctest test
+          make -C librclone/ctest clean
+          librclone/python/test_rclone.py
+        if: matrix.librclonetest
+
+      - name: Compile all architectures test
+        shell: bash
+        run: |
+          make
+          make compile_all
+        if: matrix.compile_all
+
+      - name: Patch makefile, remove rclone --config bin/travis.rclone.conf
+        shell: bash
+        run: |
+          echo "grep before:"
+          grep "rclone --" Makefile 
+          sed -ibak "s!rclone --config bin/travis.rclone.conf!echo rclone --config bin/travis.rclone.conf!" Makefile
+          sed -ibak "s!./echo rclone !echo rclone !" Makefile
+          echo "grep after:"
+          grep "rclone --" Makefile 
+
+      - name: Deploy built binaries
+        # working-directory: '$(modulePath)'
+        # Deploy binaries if enabled in config && not a PR && not a fork
+        #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
+        if: matrix.deploy
+        env:
+          RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]];  then make release_dep_linux   ; fi
+          # if [[ "${{ matrix.os }}" == "windows-latest" ]]; then make release_dep_windows ; fi
+          make ci_beta
+
+      - name: Prepare for Publish /0-arc/
+        continue-on-error: true
+        env:
+          RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
+        # working-directory: '$(modulePath)'
+        # Deploy binaries if enabled in config && not a PR && not a fork
+        #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
+        shell: bash
+        run: |
+          rclone_version=$(cat VERSION)
+          ls -lR >>rclone.lst
+          echo Create tar.xz archive
+          # create tar.xz with rclone* and manual
+          if [[ ${{ github.event.inputs.archive_tarxz == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            tar -cv --exclude=*.tar* --exclude=*.go rclone* MANUAL.txt VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}.tar.xz
+            ls ./0-arc/*
+          fi
+          # create tar.xz with all files
+          if [[ ${{ github.event.inputs.archive_all == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            tar -cv --exclude=*.tar* --exclude=./0-arc/* . | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}-all.tar.xz
+            ls ./0-arc/*
+          fi
+          # create tar.xz with zip files found
+          if [[ ${{ github.event.inputs.archive_zips == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            find . \( -name "*.zip" \) -print > ./0-arc/zipfiles.txt
+            echo ./MANUAL.* >> ./0-arc/zipfiles.txt
+            echo ./VERSION >> ./0-arc/zipfiles.txt
+            tar -cv -I ./0-arc/zipfiles.txt | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}-zips.tar.xz
+            ls ./0-arc/*
+          fi
+          echo Done tar.
+
+      - name: Publish Release latest
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_LATEST }}
+          files: |
+            *latest*.zip
+            build/*latest*.zip
+
+      - name: Publish Release version
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_RELEASE }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
+          files: |
+            *release*.zip
+            build/*release*.zip
+
+      - name: Publish Release beta
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
+          files: |
+            *beta.*.zip
+            build/*beta.*.zip
+
+      - name: Publish Release ARCXZ
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_ARCXZ }}
+          files: |
+            ./0-arc/*
+
+  lint:
+    if: ${{ inputs.lint }}
+    # if: ${{ github.event.inputs.manual == 'true' || (github.repository == 'deep-soft/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
+
+    timeout-minutes: 30
+    name: "lint"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: deep-soft/checkout@v4
+
+      - name: Code quality test
+        uses: golangci/golangci-lint-action@v4
+        with:
+          # Optional: version of golangci-lint to use in form of v1.2 or v1.2.3 or `latest` to use the latest version
+          version: latest
+
+      # Run govulncheck on the latest go version, the one we build binaries with
+      - name: Install Go
+        uses: deep-soft/setup-go@v5
+        with:
+          go-version: '>=1.22.0-rc.1'
+          check-latest: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Scan for vulnerabilities
+        run: govulncheck ./...
+
+  android:
+    if: ${{ inputs.build_android }}
+    #if: ${{ (github.event.inputs.build_android == 'true') && (github.event.inputs.manual == 'true') }}
+    timeout-minutes: 30
+    name: "android-all"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: deep-soft/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Upgrade together with NDK version
+      - name: Set up Go
+        uses: deep-soft/setup-go@v5
+        with:
+          go-version: '>=1.22.0-rc.1'
+
+      - name: Go module cache
+        uses: deep-soft/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ matrix.job_name }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ matrix.job_name }}-go-
+
+      - name: Set global environment variables
+        shell: bash
+        run: |
+          echo "VERSION=$(make version)" >> $GITHUB_ENV
+
+      - name: Set env.PROG_VERSION
+        continue-on-error: true
+        shell: bash
+        run: |
+          rclone_version=$(cat VERSION)
+          echo "PROG_VERSION=$rclone_version" >> $GITHUB_ENV
+          rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
+          echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
+          echo "${{ env.PROG_NAME }}-$rclone_version-$rclone_commit" > ${{github.workspace}}/_version_.txt
+
+      - name: build native rclone
+        run: |
+          make
+
+      - name: install gomobile
+        run: |
+          go install golang.org/x/mobile/cmd/gobind@latest
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          env PATH=$PATH:~/go/bin gomobile init
+          echo "RCLONE_NDK_VERSION=21" >> $GITHUB_ENV
+
+      - name: arm-v7a gomobile build
+        run: env PATH=$PATH:~/go/bin gomobile bind -androidapi ${RCLONE_NDK_VERSION} -v -target=android/arm -javapkg=org.rclone -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} github.com/rclone/rclone/librclone/gomobile
+
+      - name: arm-v7a Set environment variables
+        shell: bash
+        run: |
+          echo "CC=$(echo $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi${RCLONE_NDK_VERSION}-clang)" >> $GITHUB_ENV
+          echo "CC_FOR_TARGET=$CC" >> $GITHUB_ENV
+          echo 'GOOS=android' >> $GITHUB_ENV
+          echo 'GOARCH=arm' >> $GITHUB_ENV
+          echo 'GOARM=7' >> $GITHUB_ENV
+          echo 'CGO_ENABLED=1' >> $GITHUB_ENV
+          echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
+
+      - name: arm-v7a build
+        run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-armv7a .
+
+      - name: arm64-v8a Set environment variables
+        shell: bash
+        run: |
+          echo "CC=$(echo $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android${RCLONE_NDK_VERSION}-clang)" >> $GITHUB_ENV
+          echo "CC_FOR_TARGET=$CC" >> $GITHUB_ENV
+          echo 'GOOS=android' >> $GITHUB_ENV
+          echo 'GOARCH=arm64' >> $GITHUB_ENV
+          echo 'CGO_ENABLED=1' >> $GITHUB_ENV
+          echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
+
+      - name: arm64-v8a build
+        run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-armv8a .
+
+      - name: x86 Set environment variables
+        shell: bash
+        run: |
+          echo "CC=$(echo $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android${RCLONE_NDK_VERSION}-clang)" >> $GITHUB_ENV
+          echo "CC_FOR_TARGET=$CC" >> $GITHUB_ENV
+          echo 'GOOS=android' >> $GITHUB_ENV
+          echo 'GOARCH=386' >> $GITHUB_ENV
+          echo 'CGO_ENABLED=1' >> $GITHUB_ENV
+          echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
+
+      - name: x86 build
+        run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-x86 .
+
+      - name: x64 Set environment variables
+        shell: bash
+        run: |
+          echo "CC=$(echo $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android${RCLONE_NDK_VERSION}-clang)" >> $GITHUB_ENV
+          echo "CC_FOR_TARGET=$CC" >> $GITHUB_ENV
+          echo 'GOOS=android' >> $GITHUB_ENV
+          echo 'GOARCH=amd64' >> $GITHUB_ENV
+          echo 'CGO_ENABLED=1' >> $GITHUB_ENV
+          echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
+
+      - name: x64 build
+        run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-x64 .
+
+      - name: Deploy built binaries
+        # working-directory: '$(modulePath)'
+        # Deploy binaries if enabled in config && not a PR && not a fork
+        #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
+        #if: matrix.deploy
+        env:
+          RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          pushd build
+          zip -m -9 rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-armv7a.zip rclone-android-${RCLONE_NDK_VERSION}-armv7a
+          zip -m -9 rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-armv8a.zip rclone-android-${RCLONE_NDK_VERSION}-armv8a
+          zip -m -9 rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x86.zip    rclone-android-${RCLONE_NDK_VERSION}-x86
+          zip -m -9 rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x64.zip    rclone-android-${RCLONE_NDK_VERSION}-x64
+          cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-armv7a.zip rclone-beta-latest-android-${RCLONE_NDK_VERSION}-armv7a.zip
+          cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-armv8a.zip rclone-beta-latest-android-${RCLONE_NDK_VERSION}-armv8a.zip
+          cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x86.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x86.zip
+          cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x64.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x64.zip
+          popd
+
+      - name: Prepare artifacts for Release /0-arc/
+        continue-on-error: true
+        env:
+          RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
+        # Upload artifacts if not a PR && not a fork
+        #if: env.RCLONE_CONFIG_PASS != '' && github.head_ref == '' && github.repository == 'rclone/rclone'
+        shell: bash
+        run: |
+          rclone_version=$(cat VERSION)
+          ls -lR >>rclone.lst
+          echo Create tar.xz archive
+          # create tar.xz with rclone* and manual
+          if [[ ${{ github.event.inputs.archive_tarxz == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            tar -cv --exclude=*.tar* --exclude=*.go ./build/. rclone* MANUAL.txt VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android.tar.xz
+            ls ./0-arc/*
+          fi
+          # create tar.xz with all files
+          if [[ ${{ github.event.inputs.archive_all == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            tar -cv --exclude=*.tar* --exclude=./0-arc/* . | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android-all.tar.xz
+            ls ./0-arc/*
+          fi
+          # create tar.xz with zip files found
+          if [[ ${{ github.event.inputs.archive_zips == 'true' }} == 'true' ]]; then
+            mkdir ./0-arc
+            find . \( -name "*.zip" \) -print > ./0-arc/zipfiles.txt
+            echo ./MANUAL.* >> ./0-arc/zipfiles.txt
+            echo ./VERSION >> ./0-arc/zipfiles.txt
+            tar -cv -I ./0-arc/zipfiles.txt | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android-zips.tar.xz
+            ls ./0-arc/*
+          fi
+          echo Done tar.
+
+      - name: Publish Release latest
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_LATEST }}
+          files: |
+            *latest*.zip
+            build/*latest*.zip
+            ${{github.workspace}}/_version_.txt
+
+      - name: Publish Release version
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_RELEASE }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
+          files: |
+            *release*.*.zip
+            build/*release*android*.zip
+            ${{github.workspace}}/_version_.txt
+
+      - name: Publish Release beta
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
+          files: |
+            *beta.*.zip
+            build/*beta.*.zip
+            ${{github.workspace}}/_version_.txt
+
+      - name: Publish Release ARCXZ
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_ARCXZ }}
+          files: |
+            ./0-arc/*
+            ${{github.workspace}}/_version_.txt
