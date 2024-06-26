@@ -1,9 +1,8 @@
 name: Docker release build
 
 on:
-    workflow_dispatch:
-#  release:
-#    types: [published]
+  release:
+    types: [published]
 
 jobs:
     build:
