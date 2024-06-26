@@ -1,10 +1,9 @@
 name: Docker beta build
 
 on:
-    workflow_dispatch:
-#    push:
-#      branches:
-#        - master
+    push:
+      branches:
+        - master
 jobs:
     build:
         if: github.repository == 'rclone/rclone'
@@ -57,7 +56,7 @@ jobs:
               run: |
                 df -h .
             - name: Build and publish image
-              uses: docker/build-push-action@v5
+              uses: docker/build-push-action@v6
               with:
                 file: Dockerfile
                 context: .
