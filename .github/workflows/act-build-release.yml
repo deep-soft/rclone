@@ -4,9 +4,10 @@
 
 name: act-build-release
 # act-build-release.yml
-# date: 2024.02.18 08:30
+# date: 2024.07.09 01:00
 # go >=1.22.0-rc.1
 # Patch makefile, remove rclone --config bin/travis.rclone.conf
+# mac-12
 
 # Trigger the workflow on push or pull request
 on:
@@ -96,7 +97,7 @@ jobs:
             deploy: false
 
           - job_name: mac_amd64
-            os: macos-11
+            os: macos-12
             go: '>=1.22.0-rc.1'
             gotags: 'cmount'
             build_flags: '-include "^darwin/amd64" -cgo'
@@ -105,7 +106,7 @@ jobs:
             deploy: true
 
           - job_name: mac_arm64
-            os: macos-11
+            os: macos-12
             go: '>=1.22.0-rc.1'
             gotags: 'cmount'
             build_flags: '-include "^darwin/arm64" -cgo -macos-arch arm64 -cgo-cflags=-I/usr/local/include -cgo-ldflags=-L/usr/local/lib'
