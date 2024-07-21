@@ -4,8 +4,8 @@
 
 name: act-build-release
 # act-build-release.yml
-# date: 2024.07.09 01:00
-# go >=1.22.0-rc.1
+# date: 2024.07.21 08:30
+# go: >=1.23.0-rc.1
 # Patch makefile, remove rclone --config bin/travis.rclone.conf
 # mac-12
 
@@ -79,7 +79,7 @@ jobs:
         include:
           - job_name: linux
             os: ubuntu-latest
-            go: '>=1.22.0-rc.1'
+            go: '>=1.23.0-rc.1'
             gotags: cmount
             build_flags: '-include "^linux/"'
             check: true
@@ -90,7 +90,7 @@ jobs:
 
           - job_name: linux_386
             os: ubuntu-latest
-            go: '>=1.22.0-rc.1'
+            go: '>=1.23.0-rc.1'
             goarch: 386
             gotags: cmount
             quicktest: true
@@ -98,7 +98,7 @@ jobs:
 
           - job_name: mac_amd64
             os: macos-12
-            go: '>=1.22.0-rc.1'
+            go: '>=1.23.0-rc.1'
             gotags: 'cmount'
             build_flags: '-include "^darwin/amd64" -cgo'
             quicktest: true
@@ -107,14 +107,14 @@ jobs:
 
           - job_name: mac_arm64
             os: macos-12
-            go: '>=1.22.0-rc.1'
+            go: '>=1.23.0-rc.1'
             gotags: 'cmount'
             build_flags: '-include "^darwin/arm64" -cgo -macos-arch arm64 -cgo-cflags=-I/usr/local/include -cgo-ldflags=-L/usr/local/lib'
             deploy: true
 
           - job_name: windows
             os: windows-latest
-            go: '>=1.22.0-rc.1'
+            go: '>=1.23.0-rc.1'
             gotags: cmount
             cgo: '0'
             build_flags: '-include "^windows/"'
@@ -124,19 +124,19 @@ jobs:
 
           - job_name: other_os
             os: ubuntu-latest
-            go: '>=1.22.0-rc.1'
+            go: '>=1.23.0-rc.1'
             build_flags: '-exclude "^(windows/|darwin/|linux/)"'
             compile_all: true
             deploy: true
 
-          - job_name: go1.20
+          - job_name: go1.21
             os: ubuntu-latest
             go: '1.20'
             quicktest: true
             racequicktest: true
             deploy: false
 
-          - job_name: go1.21
+          - job_name: go1.22
             os: ubuntu-latest
             go: '1.21'
             quicktest: true
@@ -172,15 +172,21 @@ jobs:
           sudo modprobe fuse
           sudo chmod 666 /dev/fuse
           sudo chown root:$USER /etc/fuse.conf
-          sudo apt-get install fuse3 libfuse-dev rpm pkg-config
+          sudo apt-get install fuse3 libfuse-dev rpm pkg-config git-annex git-annex-remote-rclone
         if: matrix.os == 'ubuntu-latest'
 
       - name: Install Libraries on macOS
         shell: bash
         run: |
+          # https://github.com/Homebrew/brew/issues/15621#issuecomment-1619266788
+          # https://github.com/orgs/Homebrew/discussions/4612#discussioncomment-6319008
+          unset HOMEBREW_NO_INSTALL_FROM_API
+          brew untap --force homebrew/core
+          brew untap --force homebrew/cask
           brew update
           brew install --cask macfuse
-        if: matrix.os == 'macos-11'
+          brew install git-annex git-annex-remote-rclone
+        if: matrix.os == 'macos-latest'
 
       - name: Install Libraries on Windows
         shell: powershell
@@ -209,28 +215,6 @@ jobs:
           make vars
           printf "\n\nSystem environment:\n\n"
           env
-
-      - name: Go module cache
-        uses: deep-soft/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Set global environment variables
-        shell: bash
-        run: |
-          echo "VERSION=$(make version)" >> $GITHUB_ENV
-
-      - name: Set env.PROG_VERSION
-        continue-on-error: true
-        shell: bash
-        run: |
-          rclone_version=$(cat VERSION)
-          echo "PROG_VERSION=$rclone_version" >> $GITHUB_ENV
-          rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
-          echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
 
       - name: Build rclone
         shell: bash
@@ -389,7 +373,7 @@ jobs:
       - name: Install Go
         uses: deep-soft/setup-go@v5
         with:
-          go-version: '>=1.22.0-rc.1'
+          go-version: '>=1.23.0-rc.1'
           check-latest: true
 
       - name: Install govulncheck
@@ -415,7 +399,7 @@ jobs:
       - name: Set up Go
         uses: deep-soft/setup-go@v5
         with:
-          go-version: '>=1.22.0-rc.1'
+          go-version: '>=1.23.0-rc.1'
 
       - name: Go module cache
         uses: deep-soft/cache@v4
