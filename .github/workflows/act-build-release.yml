@@ -4,8 +4,8 @@
 
 name: act-build-release
 # act-build-release.yml
-# date: 2024.07.21 08:30
-# go: >=1.23.0-rc.1
+# date: 2024.07.21 08:40
+# go >=1.23.0-rc.1
 # Patch makefile, remove rclone --config bin/travis.rclone.conf
 # mac-12
 
@@ -131,14 +131,14 @@ jobs:
 
           - job_name: go1.21
             os: ubuntu-latest
-            go: '1.20'
+            go: '1.21'
             quicktest: true
             racequicktest: true
             deploy: false
 
           - job_name: go1.22
             os: ubuntu-latest
-            go: '1.21'
+            go: '1.22'
             quicktest: true
             racequicktest: true
             deploy: false
@@ -216,6 +216,28 @@ jobs:
           printf "\n\nSystem environment:\n\n"
           env
 
+      - name: Go module cache
+        uses: deep-soft/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Set global environment variables
+        shell: bash
+        run: |
+          echo "VERSION=$(make version)" >> $GITHUB_ENV
+
+      - name: Set env.PROG_VERSION
+        continue-on-error: true
+        shell: bash
+        run: |
+          rclone_version=$(cat VERSION)
+          echo "PROG_VERSION=$rclone_version" >> $GITHUB_ENV
+          rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
+          echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
+
       - name: Build rclone
         shell: bash
         run: |
@@ -262,7 +284,6 @@ jobs:
           sed -ibak "s!./echo rclone !echo rclone !" Makefile
           echo "grep after:"
           grep "rclone --" Makefile 
-
       - name: Deploy built binaries
         # working-directory: '$(modulePath)'
         # Deploy binaries if enabled in config && not a PR && not a fork
@@ -408,12 +429,10 @@ jobs:
           key: ${{ matrix.job_name }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ matrix.job_name }}-go-
-
       - name: Set global environment variables
         shell: bash
         run: |
           echo "VERSION=$(make version)" >> $GITHUB_ENV
-
       - name: Set env.PROG_VERSION
         continue-on-error: true
         shell: bash
@@ -423,18 +442,15 @@ jobs:
           rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
           echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
           echo "${{ env.PROG_NAME }}-$rclone_version-$rclone_commit" > ${{github.workspace}}/_version_.txt
-
       - name: build native rclone
         run: |
           make
-
       - name: install gomobile
         run: |
           go install golang.org/x/mobile/cmd/gobind@latest
           go install golang.org/x/mobile/cmd/gomobile@latest
           env PATH=$PATH:~/go/bin gomobile init
           echo "RCLONE_NDK_VERSION=21" >> $GITHUB_ENV
-
       - name: arm-v7a gomobile build
         run: env PATH=$PATH:~/go/bin gomobile bind -androidapi ${RCLONE_NDK_VERSION} -v -target=android/arm -javapkg=org.rclone -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} github.com/rclone/rclone/librclone/gomobile
 
@@ -448,7 +464,6 @@ jobs:
           echo 'GOARM=7' >> $GITHUB_ENV
           echo 'CGO_ENABLED=1' >> $GITHUB_ENV
           echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
-
       - name: arm-v7a build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-armv7a .
 
@@ -461,7 +476,6 @@ jobs:
           echo 'GOARCH=arm64' >> $GITHUB_ENV
           echo 'CGO_ENABLED=1' >> $GITHUB_ENV
           echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
-
       - name: arm64-v8a build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-armv8a .
 
@@ -474,7 +488,6 @@ jobs:
           echo 'GOARCH=386' >> $GITHUB_ENV
           echo 'CGO_ENABLED=1' >> $GITHUB_ENV
           echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
-
       - name: x86 build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-x86 .
 
@@ -487,7 +500,6 @@ jobs:
           echo 'GOARCH=amd64' >> $GITHUB_ENV
           echo 'CGO_ENABLED=1' >> $GITHUB_ENV
           echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
-
       - name: x64 build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-x64 .
 
@@ -511,7 +523,6 @@ jobs:
           cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x86.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x86.zip
           cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x64.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x64.zip
           popd
-
       - name: Prepare artifacts for Release /0-arc/
         continue-on-error: true
         env:
@@ -545,7 +556,6 @@ jobs:
             ls ./0-arc/*
           fi
           echo Done tar.
-
       - name: Publish Release latest
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -556,7 +566,6 @@ jobs:
             *latest*.zip
             build/*latest*.zip
             ${{github.workspace}}/_version_.txt
-
       - name: Publish Release version
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -567,7 +576,6 @@ jobs:
             *release*.*.zip
             build/*release*android*.zip
             ${{github.workspace}}/_version_.txt
-
       - name: Publish Release beta
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -578,7 +586,6 @@ jobs:
             *beta.*.zip
             build/*beta.*.zip
             ${{github.workspace}}/_version_.txt
-
       - name: Publish Release ARCXZ
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
