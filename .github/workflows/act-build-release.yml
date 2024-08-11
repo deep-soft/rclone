@@ -4,10 +4,10 @@
 
 name: act-build-release
 # act-build-release.yml
-# date: 2024.07.21 08:40
+# date: 2024.08.11 07:10
 # go >=1.23.0-rc.1
 # Patch makefile, remove rclone --config bin/travis.rclone.conf
-# mac-12
+# mac-latest
 
 # Trigger the workflow on push or pull request
 on:
@@ -97,16 +97,16 @@ jobs:
             deploy: false
 
           - job_name: mac_amd64
-            os: macos-12
+            os: macos-latest
             go: '>=1.23.0-rc.1'
             gotags: 'cmount'
             build_flags: '-include "^darwin/amd64" -cgo'
             quicktest: true
-            racequicktest: false
+            racequicktest: true
             deploy: true
 
           - job_name: mac_arm64
-            os: macos-12
+            os: macos-latest
             go: '>=1.23.0-rc.1'
             gotags: 'cmount'
             build_flags: '-include "^darwin/arm64" -cgo -macos-arch arm64 -cgo-cflags=-I/usr/local/include -cgo-ldflags=-L/usr/local/lib'
@@ -167,15 +167,16 @@ jobs:
           if [[ "${{ matrix.cgo }}" != "" ]]; then echo 'CGO_ENABLED=${{ matrix.cgo }}' >> $GITHUB_ENV ; fi
 
       - name: Install Libraries on Linux
+        if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           sudo modprobe fuse
           sudo chmod 666 /dev/fuse
           sudo chown root:$USER /etc/fuse.conf
           sudo apt-get install fuse3 libfuse-dev rpm pkg-config git-annex git-annex-remote-rclone
-        if: matrix.os == 'ubuntu-latest'
 
       - name: Install Libraries on macOS
+        if: matrix.os == 'macos-latest'
         shell: bash
         run: |
           # https://github.com/Homebrew/brew/issues/15621#issuecomment-1619266788
@@ -186,9 +187,9 @@ jobs:
           brew update
           brew install --cask macfuse
           brew install git-annex git-annex-remote-rclone
-        if: matrix.os == 'macos-latest'
 
       - name: Install Libraries on Windows
+        if: matrix.os == 'windows-latest'
         shell: powershell
         run: |
           $ProgressPreference = 'SilentlyContinue'
@@ -202,7 +203,6 @@ jobs:
           # can be used on Windows as on macOS and Linux
           $path = (get-command mingw32-make.exe).Path
           Copy-Item -Path $path -Destination (Join-Path (Split-Path -Path $path) 'make.exe')
-        if: matrix.os == 'windows-latest'
 
       - name: Print Go version and environment
         shell: bash
@@ -215,14 +215,6 @@ jobs:
           make vars
           printf "\n\nSystem environment:\n\n"
           env
-
-      - name: Go module cache
-        uses: deep-soft/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
 
       - name: Set global environment variables
         shell: bash
@@ -249,31 +241,31 @@ jobs:
           rclone version
 
       - name: Run tests
+        if: matrix.quicktest
         shell: bash
         run: |
           make quicktest
-        if: matrix.quicktest
 
       - name: Race test
+        if: matrix.racequicktest
         shell: bash
         run: |
           make racequicktest
-        if: matrix.racequicktest
 
       - name: Run librclone tests
+        if: matrix.librclonetest
         shell: bash
         run: |
           make -C librclone/ctest test
           make -C librclone/ctest clean
           librclone/python/test_rclone.py
-        if: matrix.librclonetest
 
       - name: Compile all architectures test
+        if: matrix.compile_all
         shell: bash
         run: |
           make
           make compile_all
-        if: matrix.compile_all
 
       - name: Patch makefile, remove rclone --config bin/travis.rclone.conf
         shell: bash
@@ -284,11 +276,12 @@ jobs:
           sed -ibak "s!./echo rclone !echo rclone !" Makefile
           echo "grep after:"
           grep "rclone --" Makefile 
+
       - name: Deploy built binaries
+        if: matrix.deploy
         # working-directory: '$(modulePath)'
         # Deploy binaries if enabled in config && not a PR && not a fork
         #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
-        if: matrix.deploy
         env:
           RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
         continue-on-error: true
@@ -429,10 +422,12 @@ jobs:
           key: ${{ matrix.job_name }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ matrix.job_name }}-go-
+
       - name: Set global environment variables
         shell: bash
         run: |
           echo "VERSION=$(make version)" >> $GITHUB_ENV
+
       - name: Set env.PROG_VERSION
         continue-on-error: true
         shell: bash
@@ -442,18 +437,20 @@ jobs:
           rclone_commit=$(git rev-list --count HEAD).$(git show --no-patch --no-notes --pretty='%h' HEAD)
           echo "PROG_COMMIT=$rclone_commit" >> $GITHUB_ENV
           echo "${{ env.PROG_NAME }}-$rclone_version-$rclone_commit" > ${{github.workspace}}/_version_.txt
+
       - name: build native rclone
         run: |
           make
+
       - name: install gomobile
         run: |
           go install golang.org/x/mobile/cmd/gobind@latest
           go install golang.org/x/mobile/cmd/gomobile@latest
           env PATH=$PATH:~/go/bin gomobile init
           echo "RCLONE_NDK_VERSION=21" >> $GITHUB_ENV
+
       - name: arm-v7a gomobile build
         run: env PATH=$PATH:~/go/bin gomobile bind -androidapi ${RCLONE_NDK_VERSION} -v -target=android/arm -javapkg=org.rclone -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} github.com/rclone/rclone/librclone/gomobile
-
       - name: arm-v7a Set environment variables
         shell: bash
         run: |
@@ -464,9 +461,9 @@ jobs:
           echo 'GOARM=7' >> $GITHUB_ENV
           echo 'CGO_ENABLED=1' >> $GITHUB_ENV
           echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
+
       - name: arm-v7a build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-armv7a .
-
       - name: arm64-v8a Set environment variables
         shell: bash
         run: |
@@ -476,9 +473,9 @@ jobs:
           echo 'GOARCH=arm64' >> $GITHUB_ENV
           echo 'CGO_ENABLED=1' >> $GITHUB_ENV
           echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
+
       - name: arm64-v8a build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-armv8a .
-
       - name: x86 Set environment variables
         shell: bash
         run: |
@@ -504,10 +501,10 @@ jobs:
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-x64 .
 
       - name: Deploy built binaries
+        #if: matrix.deploy
+        #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
         # working-directory: '$(modulePath)'
         # Deploy binaries if enabled in config && not a PR && not a fork
-        #if: env.RCLONE_CONFIG_PASS != '' && matrix.deploy && github.head_ref == '' && github.repository == 'rclone/rclone
-        #if: matrix.deploy
         env:
           RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
         continue-on-error: true
@@ -523,12 +520,13 @@ jobs:
           cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x86.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x86.zip
           cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x64.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x64.zip
           popd
+
       - name: Prepare artifacts for Release /0-arc/
+        #if: env.RCLONE_CONFIG_PASS != '' && github.head_ref == '' && github.repository == 'rclone/rclone'
         continue-on-error: true
         env:
           RCLONE_CONFIG_PASS: ${{ secrets.RCLONE_CONFIG_PASS }}
         # Upload artifacts if not a PR && not a fork
-        #if: env.RCLONE_CONFIG_PASS != '' && github.head_ref == '' && github.repository == 'rclone/rclone'
         shell: bash
         run: |
           rclone_version=$(cat VERSION)
@@ -556,6 +554,7 @@ jobs:
             ls ./0-arc/*
           fi
           echo Done tar.
+
       - name: Publish Release latest
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -566,6 +565,7 @@ jobs:
             *latest*.zip
             build/*latest*.zip
             ${{github.workspace}}/_version_.txt
+
       - name: Publish Release version
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -576,6 +576,7 @@ jobs:
             *release*.*.zip
             build/*release*android*.zip
             ${{github.workspace}}/_version_.txt
+
       - name: Publish Release beta
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -586,6 +587,7 @@ jobs:
             *beta.*.zip
             build/*beta.*.zip
             ${{github.workspace}}/_version_.txt
+
       - name: Publish Release ARCXZ
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
