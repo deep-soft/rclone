@@ -272,7 +272,9 @@ jobs:
         run: |
           echo "grep before:"
           grep "rclone --" Makefile 
-          sed -ibak "s!rclone --config bin/travis.rclone.conf!echo rclone --config bin/travis.rclone.conf!" Makefile
+          #sed -ibak "s!rclone --config bin/travis.rclone.conf!echo rclone --config bin/travis.rclone.conf!" Makefile
+          #sed -ibak "s!./echo rclone !echo rclone !" Makefile
+          sed -ibak "s!rclone --no-check-dest --config bin/ci.rclone.conf!echo rclone --no-check-dest --config bin/ci.rclone.conf!" Makefile
           sed -ibak "s!./echo rclone !echo rclone !" Makefile
           echo "grep after:"
           grep "rclone --" Makefile 
