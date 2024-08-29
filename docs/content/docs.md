@@ -42,12 +42,15 @@ See the following for detailed instructions for
   * [Digi Storage](/koofr/#digi-storage)
   * [Dropbox](/dropbox/)
   * [Enterprise File Fabric](/filefabric/)
+  * [Files.com](/filescom/)
   * [FTP](/ftp/)
+  * [Gofile](/gofile/)
   * [Google Cloud Storage](/googlecloudstorage/)
   * [Google Drive](/drive/)
   * [Google Photos](/googlephotos/)
   * [Hasher](/hasher/) - to handle checksums for other remotes
   * [HDFS](/hdfs/)
+  * [Hetzner Storage Box](/sftp/#hetzner-storage-box)
   * [HiDrive](/hidrive/)
   * [HTTP](/http/)
   * [Internet Archive](/internetarchive/)
@@ -65,11 +68,13 @@ See the following for detailed instructions for
   * [Oracle Object Storage](/oracleobjectstorage/)
   * [Pcloud](/pcloud/)
   * [PikPak](/pikpak/)
+  * [Pixeldrain](/pixeldrain/)
   * [premiumize.me](/premiumizeme/)
   * [put.io](/putio/)
   * [Proton Drive](/protondrive/)
   * [QingStor](/qingstor/)
   * [Quatrix by Maytech](/quatrix/)
+  * [rsync.net](/sftp/#rsync-net)
   * [Seafile](/seafile/)
   * [SFTP](/sftp/)
   * [Sia](/sia/)
@@ -1342,11 +1347,12 @@ flag set) such as:
 - local
 - ftp
 - sftp
+- pcloud
 
 Without `--inplace` (the default) rclone will first upload to a
 temporary file with an extension like this, where `XXXXXX` represents a
-random string and `.partial` is [--partial-suffix](#partial-suffix) value
-(`.partial` by default).
+hash of the source file's fingerprint and `.partial` is 
+[--partial-suffix](#partial-suffix) value (`.partial` by default).
 
     original-file-name.XXXXXX.partial
 
