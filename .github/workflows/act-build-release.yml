@@ -4,19 +4,19 @@
 
 name: act-build-release
 # act-build-release.yml
-# date: 2024.08.11 07:10
+# date: 2024.08.30 14:10
 # go >=1.23.0-rc.1
 # Patch makefile, remove rclone --config bin/travis.rclone.conf
-# mac-latest
+# mac-latest, fix build
 
 # Trigger the workflow on push or pull request
 on:
-#  push:
-#    branches:
-#      - '**'
-#    tags:
-#      - '**'
-#  pull_request:
+#   push:
+#     branches:
+#       - '**'
+#     tags:
+#       - '**'
+#   pull_request:
   workflow_dispatch:
     inputs:
 #      manual:
@@ -28,7 +28,7 @@ on:
         description: lint
         type: boolean
         required: true
-        default: true
+        default: false
       build_win_lin_mac:
         description: Build Win Lin Mac
         type: boolean
@@ -67,14 +67,12 @@ env:
 jobs:
   build:
     if: ${{ inputs.build_win_lin_mac }}
-    # if: ${{ (github.event.inputs.build_win_lin_mac == 'true') && (github.event.inputs.manual == 'true') }}
+    # if: ${{ github.event.inputs.manual == 'true' || (github.repository == 'rclone/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         job_name: ['linux', 'linux_386', 'mac_amd64', 'mac_arm64', 'windows', 'other_os', 'go1.21', 'go1.22']
-        #job_name: ['linux', 'linux_386', 'mac_amd64', 'mac_arm64', 'windows', 'other_os', 'go1.19']
-        #job_name: ['linux', 'linux_386', 'mac_amd64', 'mac_arm64', 'windows', 'other_os', 'go1.18', 'go1.19']
 
         include:
           - job_name: linux
@@ -94,7 +92,6 @@ jobs:
             goarch: 386
             gotags: cmount
             quicktest: true
-            deploy: false
 
           - job_name: mac_amd64
             os: macos-latest
@@ -134,17 +131,17 @@ jobs:
             go: '1.21'
             quicktest: true
             racequicktest: true
-            deploy: false
 
           - job_name: go1.22
             os: ubuntu-latest
             go: '1.22'
             quicktest: true
             racequicktest: true
-            deploy: false
 
     name: ${{ matrix.job_name }}
+
     runs-on: ${{ matrix.os }}
+
     steps:
       - name: Checkout
         uses: deep-soft/checkout@v4
@@ -167,16 +164,15 @@ jobs:
           if [[ "${{ matrix.cgo }}" != "" ]]; then echo 'CGO_ENABLED=${{ matrix.cgo }}' >> $GITHUB_ENV ; fi
 
       - name: Install Libraries on Linux
-        if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           sudo modprobe fuse
           sudo chmod 666 /dev/fuse
           sudo chown root:$USER /etc/fuse.conf
-          sudo apt-get install fuse3 libfuse-dev rpm pkg-config git-annex git-annex-remote-rclone
+          sudo apt-get install fuse3 libfuse-dev rpm pkg-config git-annex git-annex-remote-rclone nfs-common
+        if: matrix.os == 'ubuntu-latest'
 
       - name: Install Libraries on macOS
-        if: matrix.os == 'macos-latest'
         shell: bash
         run: |
           # https://github.com/Homebrew/brew/issues/15621#issuecomment-1619266788
@@ -187,9 +183,9 @@ jobs:
           brew update
           brew install --cask macfuse
           brew install git-annex git-annex-remote-rclone
+        if: matrix.os == 'macos-latest'
 
       - name: Install Libraries on Windows
-        if: matrix.os == 'windows-latest'
         shell: powershell
         run: |
           $ProgressPreference = 'SilentlyContinue'
@@ -203,6 +199,7 @@ jobs:
           # can be used on Windows as on macOS and Linux
           $path = (get-command mingw32-make.exe).Path
           Copy-Item -Path $path -Destination (Join-Path (Split-Path -Path $path) 'make.exe')
+        if: matrix.os == 'windows-latest'
 
       - name: Print Go version and environment
         shell: bash
@@ -220,7 +217,6 @@ jobs:
         shell: bash
         run: |
           echo "VERSION=$(make version)" >> $GITHUB_ENV
-
       - name: Set env.PROG_VERSION
         continue-on-error: true
         shell: bash
@@ -241,31 +237,32 @@ jobs:
           rclone version
 
       - name: Run tests
-        if: matrix.quicktest
         shell: bash
         run: |
           make quicktest
+        if: matrix.quicktest
 
       - name: Race test
-        if: matrix.racequicktest
         shell: bash
         run: |
           make racequicktest
+        if: matrix.racequicktest
 
       - name: Run librclone tests
-        if: matrix.librclonetest
         shell: bash
         run: |
           make -C librclone/ctest test
           make -C librclone/ctest clean
           librclone/python/test_rclone.py
+        if: matrix.librclonetest
 
       - name: Compile all architectures test
-        if: matrix.compile_all
         shell: bash
         run: |
           make
           make compile_all
+        if: matrix.compile_all
+
 
       - name: Patch makefile, remove rclone --config bin/travis.rclone.conf
         shell: bash
@@ -278,7 +275,6 @@ jobs:
           sed -ibak "s!./echo rclone !echo rclone !" Makefile
           echo "grep after:"
           grep "rclone --" Makefile 
-
       - name: Deploy built binaries
         if: matrix.deploy
         # working-directory: '$(modulePath)'
@@ -292,7 +288,6 @@ jobs:
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]];  then make release_dep_linux   ; fi
           # if [[ "${{ matrix.os }}" == "windows-latest" ]]; then make release_dep_windows ; fi
           make ci_beta
-
       - name: Prepare for Publish /0-arc/
         continue-on-error: true
         env:
@@ -327,7 +322,6 @@ jobs:
             ls ./0-arc/*
           fi
           echo Done tar.
-
       - name: Publish Release latest
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -337,7 +331,6 @@ jobs:
           files: |
             *latest*.zip
             build/*latest*.zip
-
       - name: Publish Release version
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -347,7 +340,6 @@ jobs:
           files: |
             *release*.zip
             build/*release*.zip
-
       - name: Publish Release beta
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -357,7 +349,6 @@ jobs:
           files: |
             *beta.*.zip
             build/*beta.*.zip
-
       - name: Publish Release ARCXZ
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -369,8 +360,7 @@ jobs:
 
   lint:
     if: ${{ inputs.lint }}
-    # if: ${{ github.event.inputs.manual == 'true' || (github.repository == 'deep-soft/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
-
+    #  if: ${{ github.event.inputs.manual == 'true' || (github.repository == 'rclone/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
     timeout-minutes: 30
     name: "lint"
     runs-on: ubuntu-latest
@@ -384,18 +374,18 @@ jobs:
           echo "runner-os-version=$ImageOS" >> $GITHUB_OUTPUT
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: deep-soft/checkout@v4
 
       - name: Install Go
         id: setup-go
-        uses: actions/setup-go@v5
+        uses: deep-soft/setup-go@v5
         with:
-          go-version: '>=1.22.0-rc.1'
+          go-version: '>=1.23.0-rc.1'
           check-latest: true
           cache: false
 
       - name: Cache
-        uses: actions/cache@v4
+        uses: deep-soft/cache@v4
         with:
           path: |
             ~/go/pkg/mod
@@ -450,7 +440,7 @@ jobs:
 
   android:
     if: ${{ inputs.build_android }}
-    #if: ${{ (github.event.inputs.build_android == 'true') && (github.event.inputs.manual == 'true') }}
+    # if: ${{ github.event.inputs.manual == 'true' || (github.repository == 'rclone/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
     timeout-minutes: 30
     name: "android-all"
     runs-on: ubuntu-latest
@@ -495,6 +485,7 @@ jobs:
 
       - name: arm-v7a gomobile build
         run: env PATH=$PATH:~/go/bin gomobile bind -androidapi ${RCLONE_NDK_VERSION} -v -target=android/arm -javapkg=org.rclone -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} github.com/rclone/rclone/librclone/gomobile
+
       - name: arm-v7a Set environment variables
         shell: bash
         run: |
@@ -508,6 +499,7 @@ jobs:
 
       - name: arm-v7a build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-armv7a .
+
       - name: arm64-v8a Set environment variables
         shell: bash
         run: |
@@ -520,6 +512,7 @@ jobs:
 
       - name: arm64-v8a build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-armv8a .
+
       - name: x86 Set environment variables
         shell: bash
         run: |
@@ -529,6 +522,7 @@ jobs:
           echo 'GOARCH=386' >> $GITHUB_ENV
           echo 'CGO_ENABLED=1' >> $GITHUB_ENV
           echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
+
       - name: x86 build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-x86 .
 
@@ -541,6 +535,7 @@ jobs:
           echo 'GOARCH=amd64' >> $GITHUB_ENV
           echo 'CGO_ENABLED=1' >> $GITHUB_ENV
           echo 'CGO_LDFLAGS=-fuse-ld=lld -s -w' >> $GITHUB_ENV
+
       - name: x64 build
         run: go build -v -tags android -trimpath -ldflags '-s -X github.com/rclone/rclone/fs.Version='${VERSION} -o build/rclone-android-${RCLONE_NDK_VERSION}-x64 .
 
@@ -564,7 +559,6 @@ jobs:
           cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x86.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x86.zip
           cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x64.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x64.zip
           popd
-
       - name: Prepare artifacts for Release /0-arc/
         #if: env.RCLONE_CONFIG_PASS != '' && github.head_ref == '' && github.repository == 'rclone/rclone'
         continue-on-error: true
@@ -598,7 +592,6 @@ jobs:
             ls ./0-arc/*
           fi
           echo Done tar.
-
       - name: Publish Release latest
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -609,7 +602,6 @@ jobs:
             *latest*.zip
             build/*latest*.zip
             ${{github.workspace}}/_version_.txt
-
       - name: Publish Release version
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -620,7 +612,6 @@ jobs:
             *release*.*.zip
             build/*release*android*.zip
             ${{github.workspace}}/_version_.txt
-
       - name: Publish Release beta
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -631,7 +622,6 @@ jobs:
             *beta.*.zip
             build/*beta.*.zip
             ${{github.workspace}}/_version_.txt
-
       - name: Publish Release ARCXZ
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
