@@ -4,7 +4,7 @@
 
 name: act-build-release
 # act-build-release.yml
-# date: 2025.01.25 22:40
+# date: 2025.01.25 22:50
 # go >=1.23.0-rc.1
 # Patch makefile, remove rclone --config bin/travis.rclone.conf
 # mac-latest, fix build
