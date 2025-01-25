@@ -4,7 +4,7 @@
 
 name: act-build-release
 # act-build-release.yml
-# date: 2025.01.25 22:40
+# date: 2025.01.25 22:50
 # go >=1.23.0-rc.1
 # Patch makefile, remove rclone --config bin/travis.rclone.conf
 # mac-latest, fix build
@@ -303,7 +303,7 @@ jobs:
           # create tar.xz with rclone* and manual
           if [[ ${{ github.event.inputs.archive_tarxz == 'true' }} == 'true' ]]; then
             mkdir ./0-arc || true;
-            tar -cv --exclude=*.tar* --exclude=*.go rclone* MANUAL.txt VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}.tar.xz || true;
+            tar -cv --exclude=*.tar* --exclude=*.go rclone* MANUAL.* VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}.tar.xz || true;
             ls ./0-arc/* || true;
           fi
           # create tar.xz with all files
@@ -316,7 +316,7 @@ jobs:
           if [[ ${{ github.event.inputs.archive_zips == 'true' }} == 'true' ]]; then
             mkdir ./0-arc || true;
             find . \( -name "*.zip" \) -print > ./0-arc/zipfiles.txt || true;
-            echo ./MANUAL.* >> ./0-arc/zipfiles.txt || true;
+            find . \( -name "MANUAL.*" \) -print >> ./0-arc/zipfiles.txt || true;
             echo ./VERSION >> ./0-arc/zipfiles.txt || true;
             tar -cv -I ./0-arc/zipfiles.txt | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}-zips.tar.xz || true;
             ls ./0-arc/* || true;
@@ -573,7 +573,7 @@ jobs:
           # create tar.xz with rclone* and manual
           if [[ ${{ github.event.inputs.archive_tarxz == 'true' }} == 'true' ]]; then
             mkdir ./0-arc || true;
-            tar -cv --exclude=*.tar* --exclude=*.go ./build/. rclone* MANUAL.txt VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android.tar.xz || true;
+            tar -cv --exclude=*.tar* --exclude=*.go ./build/. rclone* MANUAL.* VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android.tar.xz || true;
             ls ./0-arc/* || true;
           fi
           # create tar.xz with all files
@@ -586,7 +586,7 @@ jobs:
           if [[ ${{ github.event.inputs.archive_zips == 'true' }} == 'true' ]]; then
             mkdir ./0-arc || true;
             find . \( -name "*.zip" \) -print > ./0-arc/zipfiles.txt || true;
-            echo ./MANUAL.* >> ./0-arc/zipfiles.txt || true;
+            find . \( -name "MANUAL.*" \) -print >> ./0-arc/zipfiles.txt || true;
             echo ./VERSION >> ./0-arc/zipfiles.txt || true;
             tar -cv -I ./0-arc/zipfiles.txt | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android-zips.tar.xz || true;
             ls ./0-arc/* || true;
