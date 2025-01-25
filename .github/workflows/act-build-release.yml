@@ -302,19 +302,19 @@ jobs:
           echo Create tar.xz archive
           # create tar.xz with rclone* and manual
           if [[ ${{ github.event.inputs.archive_tarxz == 'true' }} == 'true' ]]; then
-            mkdir ./0-arc
+            mkdir ./0-arc || true;
             tar -cv --exclude=*.tar* --exclude=*.go rclone* MANUAL.txt VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}.tar.xz
             ls ./0-arc/*
           fi
           # create tar.xz with all files
           if [[ ${{ github.event.inputs.archive_all == 'true' }} == 'true' ]]; then
-            mkdir ./0-arc
+            mkdir ./0-arc || true;
             tar -cv --exclude=*.tar* --exclude=./0-arc/* . | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}-all.tar.xz
             ls ./0-arc/*
           fi
           # create tar.xz with zip files found
           if [[ ${{ github.event.inputs.archive_zips == 'true' }} == 'true' ]]; then
-            mkdir ./0-arc
+            mkdir ./0-arc || true;
             find . \( -name "*.zip" \) -print > ./0-arc/zipfiles.txt
             echo ./MANUAL.* >> ./0-arc/zipfiles.txt
             echo ./VERSION >> ./0-arc/zipfiles.txt
@@ -572,19 +572,19 @@ jobs:
           echo Create tar.xz archive
           # create tar.xz with rclone* and manual
           if [[ ${{ github.event.inputs.archive_tarxz == 'true' }} == 'true' ]]; then
-            mkdir ./0-arc
+            mkdir ./0-arc || true;
             tar -cv --exclude=*.tar* --exclude=*.go ./build/. rclone* MANUAL.txt VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android.tar.xz
             ls ./0-arc/*
           fi
           # create tar.xz with all files
           if [[ ${{ github.event.inputs.archive_all == 'true' }} == 'true' ]]; then
-            mkdir ./0-arc
+            mkdir ./0-arc || true;
             tar -cv --exclude=*.tar* --exclude=./0-arc/* . | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android-all.tar.xz
             ls ./0-arc/*
           fi
           # create tar.xz with zip files found
           if [[ ${{ github.event.inputs.archive_zips == 'true' }} == 'true' ]]; then
-            mkdir ./0-arc
+            mkdir ./0-arc || true;
             find . \( -name "*.zip" \) -print > ./0-arc/zipfiles.txt
             echo ./MANUAL.* >> ./0-arc/zipfiles.txt
             echo ./VERSION >> ./0-arc/zipfiles.txt
