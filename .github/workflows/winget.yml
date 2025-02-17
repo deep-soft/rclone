@@ -1,6 +1,5 @@
 name: Publish to Winget
 on:
-  workflow_dispatch:
   release:
     types: [released]
 
