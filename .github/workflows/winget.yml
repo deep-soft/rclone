@@ -1,8 +1,8 @@
 name: Publish to Winget
 on:
   workflow_dispatch:
-#  release:
-#    types: [released]
+  release:
+    types: [released]
 
 jobs:
   publish:
