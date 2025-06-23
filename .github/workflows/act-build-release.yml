@@ -219,6 +219,7 @@ jobs:
         shell: bash
         run: |
           echo "VERSION=$(make version)" >> $GITHUB_ENV
+
       - name: Set env.PROG_VERSION
         continue-on-error: true
         shell: bash
@@ -265,7 +266,6 @@ jobs:
           make compile_all
         if: matrix.compile_all
 
-
       - name: Patch makefile, remove rclone --config bin/travis.rclone.conf
         shell: bash
         run: |
@@ -277,6 +277,7 @@ jobs:
           sed -ibak "s!./echo rclone !echo rclone !" Makefile
           echo "grep after:"
           grep "rclone --" Makefile 
+
       - name: Deploy built binaries
         if: matrix.deploy
         # working-directory: '$(modulePath)'
@@ -290,6 +291,37 @@ jobs:
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]];  then make release_dep_linux   ; fi
           # if [[ "${{ matrix.os }}" == "windows-latest" ]]; then make release_dep_windows ; fi
           make ci_beta
+
+      - name: Publish Release latest
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_LATEST }}
+          files: |
+            *latest*.zip
+            build/*latest*.zip
+
+      - name: Publish Release version
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_RELEASE }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
+          files: |
+            *release*.zip
+            build/*release*.zip
+
+      - name: Publish Release beta
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
+          files: |
+            *beta.*.zip
+            build/*beta.*.zip
+
       - name: Prepare for Publish /0-arc/
         continue-on-error: true
         env:
@@ -305,13 +337,13 @@ jobs:
           # create tar.xz with rclone* and manual
           if [[ ${{ github.event.inputs.archive_tarxz == 'true' }} == 'true' ]]; then
             mkdir ./0-arc || true;
-            tar -cv --exclude=*.tar* --exclude=*.go rclone* MANUAL.* VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}.tar.xz || true;
+            tar -cv --exclude=.git/* --exclude=*.tar* --exclude=*.go rclone* MANUAL.* VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}.tar.xz || true;
             ls ./0-arc/* || true;
           fi
           # create tar.xz with all files
           if [[ ${{ github.event.inputs.archive_all == 'true' }} == 'true' ]]; then
             mkdir ./0-arc || true;
-            tar -cv --exclude=*.tar* --exclude=./0-arc/* . | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}-all.tar.xz || true;
+            tar -cv --exclude=.git/*  --exclude=*.tar* --exclude=./0-arc/* . | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-${{ matrix.job_name }}-all.tar.xz || true;
             ls ./0-arc/* || true;
           fi
           # create tar.xz with zip files found
@@ -324,33 +356,7 @@ jobs:
             ls ./0-arc/* || true;
           fi
           echo Done tar.
-      - name: Publish Release latest
-        continue-on-error: true
-        uses: deep-soft/action-gh-release@v2.1
-        with:
-          draft: true
-          tag_name: ${{ env.TAG_NAME_LATEST }}
-          files: |
-            *latest*.zip
-            build/*latest*.zip
-      - name: Publish Release version
-        continue-on-error: true
-        uses: deep-soft/action-gh-release@v2.1
-        with:
-          draft: true
-          tag_name: ${{ env.TAG_NAME_RELEASE }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
-          files: |
-            *release*.zip
-            build/*release*.zip
-      - name: Publish Release beta
-        continue-on-error: true
-        uses: deep-soft/action-gh-release@v2.1
-        with:
-          draft: true
-          tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
-          files: |
-            *beta.*.zip
-            build/*beta.*.zip
+
       - name: Publish Release ARCXZ
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -359,86 +365,6 @@ jobs:
           tag_name: ${{ env.TAG_NAME_ARCXZ }}
           files: |
             ./0-arc/*
-
-  lint:
-    if: ${{ inputs.lint }}
-    #  if: ${{ github.event.inputs.manual == 'true' || (github.repository == 'rclone/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
-    timeout-minutes: 30
-    name: "lint"
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Get runner parameters
-        id: get-runner-parameters
-        shell: bash
-        run: |
-          echo "year-week=$(/bin/date -u "+%Y%V")" >> $GITHUB_OUTPUT
-          echo "runner-os-version=$ImageOS" >> $GITHUB_OUTPUT
-
-      - name: Checkout
-        uses: deep-soft/checkout@v4
-
-      - name: Install Go
-        id: setup-go
-        uses: deep-soft/setup-go@v5
-        with:
-          go-version: '>=1.23.0-rc.1'
-          check-latest: true
-          cache: false
-
-      - name: Cache
-        uses: deep-soft/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            ~/.cache/golangci-lint
-          key: golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
-          restore-keys: golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
-
-      - name: Code quality test (Linux)
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          skip-cache: true
-
-      - name: Code quality test (Windows)
-        uses: golangci/golangci-lint-action@v6
-        env:
-          GOOS: "windows"
-        with:
-          version: latest
-          skip-cache: true
-
-      - name: Code quality test (macOS)
-        uses: golangci/golangci-lint-action@v6
-        env:
-          GOOS: "darwin"
-        with:
-          version: latest
-          skip-cache: true
-
-      - name: Code quality test (FreeBSD)
-        uses: golangci/golangci-lint-action@v6
-        env:
-          GOOS: "freebsd"
-        with:
-          version: latest
-          skip-cache: true
-
-      - name: Code quality test (OpenBSD)
-        uses: golangci/golangci-lint-action@v6
-        env:
-          GOOS: "openbsd"
-        with:
-          version: latest
-          skip-cache: true
-
-      - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
-
-      - name: Scan for vulnerabilities
-        run: govulncheck ./...
 
   android:
     if: ${{ inputs.build_android }}
@@ -562,6 +488,40 @@ jobs:
           cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x86.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x86.zip
           cp        rclone-${{ env.PROG_VERSION }}-beta.${{ env.PROG_COMMIT }}-android-${RCLONE_NDK_VERSION}-x64.zip    rclone-beta-latest-android-${RCLONE_NDK_VERSION}-x64.zip
           popd
+
+      - name: Publish Release latest
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_LATEST }}
+          files: |
+            *latest*.zip
+            build/*latest*.zip
+            ${{github.workspace}}/_version_.txt
+
+      - name: Publish Release version
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_RELEASE }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
+          files: |
+            *release*.*.zip
+            build/*release*android*.zip
+            ${{github.workspace}}/_version_.txt
+
+      - name: Publish Release beta
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: true
+          tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
+          files: |
+            *beta.*.zip
+            build/*beta.*.zip
+            ${{github.workspace}}/_version_.txt
+
       - name: Prepare artifacts for Release /0-arc/
         #if: env.RCLONE_CONFIG_PASS != '' && github.head_ref == '' && github.repository == 'rclone/rclone'
         continue-on-error: true
@@ -576,13 +536,13 @@ jobs:
           # create tar.xz with rclone* and manual
           if [[ ${{ github.event.inputs.archive_tarxz == 'true' }} == 'true' ]]; then
             mkdir ./0-arc || true;
-            tar -cv --exclude=*.tar* --exclude=*.go ./build/. rclone* MANUAL.* VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android.tar.xz || true;
+            tar -cv --exclude=.git/*  --exclude=*.tar* --exclude=*.go ./build/. rclone* MANUAL.* VERSION | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android.tar.xz || true;
             ls ./0-arc/* || true;
           fi
           # create tar.xz with all files
           if [[ ${{ github.event.inputs.archive_all == 'true' }} == 'true' ]]; then
             mkdir ./0-arc || true;
-            tar -cv --exclude=*.tar* --exclude=./0-arc/* . | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android-all.tar.xz || true;
+            tar -cv --exclude=.git/*  --exclude=*.tar* --exclude=./0-arc/* . | xz -9 > ./0-arc/${{ env.PROG_NAME }}-$rclone_version-android-all.tar.xz || true;
             ls ./0-arc/* || true;
           fi
           # create tar.xz with zip files found
@@ -595,36 +555,7 @@ jobs:
             ls ./0-arc/* || true;
           fi
           echo Done tar.
-      - name: Publish Release latest
-        continue-on-error: true
-        uses: deep-soft/action-gh-release@v2.1
-        with:
-          draft: true
-          tag_name: ${{ env.TAG_NAME_LATEST }}
-          files: |
-            *latest*.zip
-            build/*latest*.zip
-            ${{github.workspace}}/_version_.txt
-      - name: Publish Release version
-        continue-on-error: true
-        uses: deep-soft/action-gh-release@v2.1
-        with:
-          draft: true
-          tag_name: ${{ env.TAG_NAME_RELEASE }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
-          files: |
-            *release*.*.zip
-            build/*release*android*.zip
-            ${{github.workspace}}/_version_.txt
-      - name: Publish Release beta
-        continue-on-error: true
-        uses: deep-soft/action-gh-release@v2.1
-        with:
-          draft: true
-          tag_name: ${{ env.TAG_NAME_BETA }}-${{ env.PROG_VERSION }}-${{ env.PROG_COMMIT }}
-          files: |
-            *beta.*.zip
-            build/*beta.*.zip
-            ${{github.workspace}}/_version_.txt
+
       - name: Publish Release ARCXZ
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
@@ -634,3 +565,83 @@ jobs:
           files: |
             ./0-arc/*
             ${{github.workspace}}/_version_.txt
+
+  lint:
+    if: ${{ inputs.lint }}
+    #  if: ${{ github.event.inputs.manual == 'true' || (github.repository == 'rclone/rclone' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name)) }}
+    timeout-minutes: 30
+    name: "lint"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get runner parameters
+        id: get-runner-parameters
+        shell: bash
+        run: |
+          echo "year-week=$(/bin/date -u "+%Y%V")" >> $GITHUB_OUTPUT
+          echo "runner-os-version=$ImageOS" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: deep-soft/checkout@v4
+
+      - name: Install Go
+        id: setup-go
+        uses: deep-soft/setup-go@v5
+        with:
+          go-version: '>=1.23.0-rc.1'
+          check-latest: true
+          cache: false
+
+      - name: Cache
+        uses: deep-soft/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+          key: golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-${{ hashFiles('go.sum') }}
+          restore-keys: golangci-lint-${{ steps.get-runner-parameters.outputs.runner-os-version }}-go${{ steps.setup-go.outputs.go-version }}-${{ steps.get-runner-parameters.outputs.year-week }}-
+
+      - name: Code quality test (Linux)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          skip-cache: true
+
+      - name: Code quality test (Windows)
+        uses: golangci/golangci-lint-action@v6
+        env:
+          GOOS: "windows"
+        with:
+          version: latest
+          skip-cache: true
+
+      - name: Code quality test (macOS)
+        uses: golangci/golangci-lint-action@v6
+        env:
+          GOOS: "darwin"
+        with:
+          version: latest
+          skip-cache: true
+
+      - name: Code quality test (FreeBSD)
+        uses: golangci/golangci-lint-action@v6
+        env:
+          GOOS: "freebsd"
+        with:
+          version: latest
+          skip-cache: true
+
+      - name: Code quality test (OpenBSD)
+        uses: golangci/golangci-lint-action@v6
+        env:
+          GOOS: "openbsd"
+        with:
+          version: latest
+          skip-cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Scan for vulnerabilities
+        run: govulncheck ./...
