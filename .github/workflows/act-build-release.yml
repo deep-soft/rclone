@@ -4,10 +4,11 @@
 
 name: act-build-release
 # act-build-release.yml
-# date: 2025.01.25 22:50
+# date: 2025.06.23 08:00
 # go >=1.23.0-rc.1
 # Patch makefile, remove rclone --config bin/travis.rclone.conf
 # mac-latest, fix build
+# setup-go, cache: false
 
 # Trigger the workflow on push or pull request
 on:
@@ -153,6 +154,7 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
           check-latest: true
+          cache: false
 
       - name: Set environment variables
         shell: bash
@@ -456,6 +458,7 @@ jobs:
         uses: deep-soft/setup-go@v5
         with:
           go-version: '>=1.23.0-rc.1'
+          cache: false
 
       - name: Set global environment variables
         shell: bash
