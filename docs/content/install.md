@@ -225,6 +225,12 @@ package is here.
 
 The rclone developers maintain a [docker image for rclone](https://hub.docker.com/r/rclone/rclone).
 
+**Note:** We also now offer a paid version of rclone with
+enterprise-grade security and zero CVEs through our partner
+[SecureBuild](https://securebuild.com/blog/introducing-securebuild).
+If you are interested, check out their website and the [Rclone
+SecureBuild Image](https://securebuild.com/images/rclone).
+
 These images are built as part of the release process based on a
 minimal Alpine Linux.
 
@@ -485,9 +491,9 @@ the locations that rclone will use.
 
 To override them set the corresponding options (as command-line arguments, or as
 [environment variables](https://rclone.org/docs/#environment-variables)):
-  - [--config](https://rclone.org/docs/#config-config-file)
-  - [--cache-dir](https://rclone.org/docs/#cache-dir-dir)
-  - [--temp-dir](https://rclone.org/docs/#temp-dir-dir)
+  - [--config](https://rclone.org/docs/#config-string)
+  - [--cache-dir](https://rclone.org/docs/#cache-dir-string)
+  - [--temp-dir](https://rclone.org/docs/#temp-dir-string)
 
 ## Autostart
 
@@ -540,7 +546,7 @@ NOTE: Remember that when rclone runs as the `SYSTEM` user, the user profile
 that it sees will not be yours. This means that if you normally run rclone with
 configuration file in the default location, to be able to use the same configuration
 when running as the system user you must explicitly tell rclone where to find
-it with the [`--config`](https://rclone.org/docs/#config-config-file) option,
+it with the [`--config`](https://rclone.org/docs/#config-string) option,
 or else it will look in the system users profile path (`C:\Windows\System32\config\systemprofile`).
 To test your command manually from a Command Prompt, you can run it with
 the [PsExec](https://docs.microsoft.com/en-us/sysinternals/downloads/psexec)

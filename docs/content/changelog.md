@@ -5,6 +5,46 @@ description: "Rclone Changelog"
 
 # Changelog
 
+## v1.70.3 - 2025-07-09
+
+[See commits](https://github.com/rclone/rclone/compare/v1.70.2...v1.70.3)
+
+* Bug Fixes
+    * check: Fix difference report (was reporting error counts) (albertony)
+    * march: Fix deadlock when using `--no-traverse` (Nick Craig-Wood)
+    * doc fixes (albertony, Nick Craig-Wood)
+* Azure Blob
+    * Fix server side copy error "requires exactly one scope" (Nick Craig-Wood)
+* B2
+    * Fix finding objects when using `--b2-version-at` (Davide Bizzarri)
+* Linkbox
+    * Fix upload error "user upload file not exist" (Nick Craig-Wood)
+* Pikpak
+    * Improve error handling for missing links and unrecoverable 500s (wiserain)
+* WebDAV
+    * Fix setting modtime to that of local object instead of remote (WeidiDeng)
+
+## v1.70.2 - 2025-06-27
+
+[See commits](https://github.com/rclone/rclone/compare/v1.70.1...v1.70.2)
+
+* Bug Fixes
+    * convmv: Make --dry-run logs less noisy (nielash)
+    * sync: Avoid copying dir metadata to itself (nielash)
+    * build: Bump github.com/go-chi/chi/v5 from 5.2.1 to 5.2.2 to fix GHSA-vrw8-fxc6-2r93 (dependabot[bot])
+    * convmv: Fix moving to unicode-equivalent name (nielash)
+    * log: Fix deadlock when using systemd logging (Nick Craig-Wood)
+    * pacer: Fix nil pointer deref in RetryError (Nick Craig-Wood)
+    * doc fixes (Ali Zein Yousuf, Nick Craig-Wood)
+* Local
+    * Fix --skip-links on Windows when skipping Junction points (Nick Craig-Wood)
+* Combine
+    * Fix directory not found errors with ListP interface (Nick Craig-Wood)
+* Mega
+    * Fix tls handshake failure (necaran)
+* Pikpak
+    * Fix uploads fail with "aws-chunked encoding is not supported" error (Nick Craig-Wood)
+
 ## v1.70.1 - 2025-06-19
 
 [See commits](https://github.com/rclone/rclone/compare/v1.70.0...v1.70.1)
@@ -28,7 +68,7 @@ description: "Rclone Changelog"
 * New Features
     * Add [`--max-connections`](/docs/#max-connections-n) to control maximum backend concurrency (Nick Craig-Wood)
     * Add [`--max-buffer-memory`](/docs/#max-buffer-memory) to limit total buffer memory usage (Nick Craig-Wood)
-    * Add transform library and [`--name-transform`](/docs/#name-transform-command-xxxx) flag (nielash)
+    * Add transform library and [`--name-transform`](/docs/#name-transform-stringarray) flag (nielash)
     * sync: Implement [`--list-cutoff`](/docs/#list-cutoff) to allow on disk sorting for reduced memory use (Nick Craig-Wood)
     * accounting: Add listed stat for number of directory entries listed (Nick Craig-Wood)
     * backend: Skip hash calculation when the hashType is None (Oleksiy Stashok)
@@ -737,7 +777,7 @@ description: "Rclone Changelog"
     * Final listings are now generated from sync results, to avoid needing to re-list (nielash)
     * Bisync is now much more resilient to changes that happen during a bisync run, and far less prone to critical errors / undetected changes (nielash)
     * Bisync is now capable of rolling a file listing back in cases of uncertainty, essentially marking the file as needing to be rechecked next time. (nielash)
-    * A few basic terminal colors are now supported, controllable with [`--color`](/docs/#color-when) (`AUTO`|`NEVER`|`ALWAYS`) (nielash)
+    * A few basic terminal colors are now supported, controllable with [`--color`](/docs/#color-autoneveralways) (`AUTO`|`NEVER`|`ALWAYS`) (nielash)
     * Initial listing snapshots of Path1 and Path2 are now generated concurrently, using the same "march" infrastructure as `check` and `sync`, for performance improvements and less risk of error. (nielash)
     * `--resync` is now much more efficient (especially for users of `--create-empty-src-dirs`) (nielash)
     * Google Docs (and other files of unknown size) are now supported (with the same options as in `sync`) (nielash)
@@ -749,7 +789,7 @@ instead of of `--size-only`, when `check` is not available.
     * A new `--max-lock` setting allows lock files to automatically renew and expire, for better automatic recovery when a run is interrupted. (nielash)
     * Bisync now supports auto-resolving sync conflicts and customizing rename behavior with new [`--conflict-resolve`](#conflict-resolve), [`--conflict-loser`](#conflict-loser), and [`--conflict-suffix`](#conflict-suffix) flags. (nielash)
     * A new [`--resync-mode`](#resync-mode) flag allows more control over which version of a file gets kept during a `--resync`. (nielash)
-    * Bisync now supports [`--retries`](/docs/#retries-int) and [`--retries-sleep`](/docs/#retries-sleep-time) (when [`--resilient`](#resilient) is set.) (nielash)
+    * Bisync now supports [`--retries`](/docs/#retries-int) and [`--retries-sleep`](/docs/#retries-sleep-duration) (when [`--resilient`](#resilient) is set.) (nielash)
     * Clarify file operation directions in dry-run logs (Kyle Reynolds)
 * Local
     * Fix cleanRootPath on Windows after go1.21.4 stdlib update (nielash)
@@ -3000,7 +3040,7 @@ instead of of `--size-only`, when `check` is not available.
 * New Features
     * The [VFS layer](/commands/rclone_mount/#vfs-virtual-file-system) was heavily reworked for this release - see below for more details
     * Interactive mode [-i/--interactive](/docs/#interactive) for destructive operations (fishbullet)
-    * Add [--bwlimit-file](/docs/#bwlimit-file-bandwidth-spec) flag to limit speeds of individual file transfers (Nick Craig-Wood)
+    * Add [--bwlimit-file](/docs/#bwlimit-file-bwtimetable) flag to limit speeds of individual file transfers (Nick Craig-Wood)
     * Transfers are sorted by start time in the stats and progress output (Max Sum)
     * Make sure backends expand `~` and environment vars in file names they use (Nick Craig-Wood)
     * Add [--refresh-times](/docs/#refresh-times) flag to set modtimes on hashless backends (Nick Craig-Wood)
