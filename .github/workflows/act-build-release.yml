@@ -4,7 +4,7 @@
 
 name: act-build-release
 # act-build-release.yml
-# date: 2025.06.23 08:00
+# date: 2025.07.31 07:30
 # go >=1.23.0-rc.1
 # Patch makefile, remove rclone --config bin/travis.rclone.conf
 # mac-latest, fix build
@@ -20,11 +20,11 @@ on:
 #   pull_request:
   workflow_dispatch:
     inputs:
-#      manual:
-#        description: Manual run (bypass default conditions)
-#        type: boolean
-#        required: true
-#        default: true
+      run_tests:
+        description: Run tests
+        type: boolean
+        required: true
+        default: false
       lint:
         description: lint
         type: boolean
@@ -82,9 +82,9 @@ jobs:
             gotags: cmount
             build_flags: '-include "^linux/"'
             check: true
-            quicktest: true
-            racequicktest: true
-            librclonetest: true
+            quicktest: ${{ inputs.run_tests }}
+            racequicktest: ${{ inputs.run_tests }}
+            librclonetest: ${{ inputs.run_tests }}
             deploy: true
 
           - job_name: linux_386
@@ -92,15 +92,15 @@ jobs:
             go: '>=1.23.0-rc.1'
             goarch: 386
             gotags: cmount
-            quicktest: true
+            quicktest: ${{ inputs.run_tests }}
 
           - job_name: mac_amd64
             os: macos-latest
             go: '>=1.23.0-rc.1'
             gotags: 'cmount'
             build_flags: '-include "^darwin/amd64" -cgo'
-            quicktest: true
-            racequicktest: true
+            quicktest: ${{ inputs.run_tests }}
+            racequicktest: ${{ inputs.run_tests }}
             deploy: true
 
           - job_name: mac_arm64
@@ -117,7 +117,7 @@ jobs:
             cgo: '0'
             build_flags: '-include "^windows/"'
             build_args: '-buildmode exe'
-            quicktest: true
+            quicktest: ${{ inputs.run_tests }}
             deploy: true
 
           - job_name: other_os
@@ -130,14 +130,14 @@ jobs:
           - job_name: go1.21
             os: ubuntu-latest
             go: '1.21'
-            quicktest: true
-            racequicktest: true
+            quicktest: ${{ inputs.run_tests }}
+            racequicktest: ${{ inputs.run_tests }}
 
           - job_name: go1.22
             os: ubuntu-latest
             go: '1.22'
-            quicktest: true
-            racequicktest: true
+            quicktest: ${{ inputs.run_tests }}
+            racequicktest: ${{ inputs.run_tests }}
 
     name: ${{ matrix.job_name }}
 
